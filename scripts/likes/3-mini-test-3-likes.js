@@ -9,6 +9,9 @@
  */
 (async function miniTest() {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Select label is now a bare <span> with no data-bloks-name (changed
+  // 2026-07-27); match on the element's own text instead.
+  const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
   const realClick = (el) => {
     el.scrollIntoView({ block: "center" });
     ["mousedown", "mouseup", "click"].forEach(t =>
@@ -18,8 +21,8 @@
   // Make sure selection mode is on.
   let icons = document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
   if (icons.length === 0) {
-    const selectBtn = [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
-      .find(el => el.innerText?.trim() === "Select");
+    const selectBtn = [...document.querySelectorAll('span,div')]
+      .find(el => ownText(el) === "Select");
     if (!selectBtn) { console.warn("Select button not found. Reload the page."); return; }
     realClick(selectBtn);
     await sleep(1500);

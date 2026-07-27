@@ -8,8 +8,11 @@
  * Run on: https://www.instagram.com/your_activity/interactions/likes
  */
 (function diagnose() {
-  const selectBtn = [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
-    .find(el => el.innerText?.trim() === "Select");
+  // Select label is now a bare <span> with no data-bloks-name (changed
+  // 2026-07-27); match on the element's own text instead.
+  const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
+  const selectBtn = [...document.querySelectorAll('span,div')]
+    .find(el => ownText(el) === "Select");
   const icons = document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
 
   console.log("%c=== IG diagnose (read only) ===", "font-weight:bold;font-size:14px");
