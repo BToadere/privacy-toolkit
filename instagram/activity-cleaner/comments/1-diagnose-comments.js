@@ -10,8 +10,12 @@
 (async function diagnoseComments() {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  const selectBtn = [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
-    .find(el => el.innerText?.trim() === "Select");
+  // Select is a bare <span> on the current UI (2026-07-27); the Flexbox
+  // wrapper is the older UI. Try both.
+  const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
+  const selectBtn = [...document.querySelectorAll('span,div')].find(el => ownText(el) === "Select")
+    || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
+      .find(el => el.innerText?.trim() === "Select");
 
   console.log("%c=== IG comments diagnose (read only) ===", "font-weight:bold;font-size:14px");
   console.log("Select button found:", selectBtn ? "yes" : "no");
