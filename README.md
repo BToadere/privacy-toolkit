@@ -31,6 +31,11 @@ cd privacy-toolkit
 git sparse-checkout set instagram
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Releases with one zip per tool are on the
+[Releases](https://github.com/BToadere/privacy-toolkit/releases) page.
+
 ## Credits
 
 `instagram/activity-cleaner` is based on

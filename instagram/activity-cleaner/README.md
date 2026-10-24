@@ -45,10 +45,10 @@ The scripts assume your Instagram UI is in **English** (labels `Select` and
 
 ## Scripts
 
-Each type has its own folder under `scripts/`. Open the matching page (see
+Each type has its own folder at the top of this folder. Open the matching page (see
 above) before running a group, and run the files in number order.
 
-**Likes** — `scripts/likes/` — page `.../interactions/likes`
+**Likes** — [`likes/`](likes/) — page `.../interactions/likes`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
@@ -57,7 +57,7 @@ above) before running a group, and run the files in number order.
 | `3-mini-test-3-likes.js` | Removes 3 likes so you see the flow | yes, 3 |
 | `4-bulk-unlike.js` | Loops and removes likes in batches | yes |
 
-**Comments** — `scripts/comments/` — page `.../interactions/comments`
+**Comments** — [`comments/`](comments/) — page `.../interactions/comments`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
@@ -65,7 +65,7 @@ above) before running a group, and run the files in number order.
 | `2-mini-test-3-comments.js` | Deletes 3 comments so you see the flow | yes, 3 |
 | `3-bulk-delete-comments.js` | Loops and deletes comments in batches | yes |
 
-**Reposts** — `scripts/reposts/` — page `.../interactions/reposts`
+**Reposts** — [`reposts/`](reposts/) — page `.../interactions/reposts`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
@@ -75,9 +75,9 @@ above) before running a group, and run the files in number order.
 | `4-unrepost-via-viewer.js` | **Recommended.** Un-reposts through the profile viewer | yes |
 
 For reposts, use `4-unrepost-via-viewer.js` — the bulk list (`1`-`3`) deletes
-unreliably. See `scripts/reposts/NOTES.md`.
+unreliably. See [`reposts/NOTES.md`](reposts/NOTES.md).
 
-**Story replies** — `scripts/story_replies/` — page `.../interactions/story_replies`
+**Story replies** — [`story_replies/`](story_replies/) — page `.../interactions/story_replies`
 
 | File | What it does | Deletes? |
 |------|--------------|----------|
@@ -103,21 +103,31 @@ side: it often shows a "deleted" toast but leaves the repost in place. This
 happens **when you delete by hand too**, so it is not caused by these scripts
 — and no sort order or setting fixes it. Use the workaround instead:
 `4-unrepost-via-viewer.js` removes reposts one by one through the profile
-viewer and works reliably. Details in `scripts/reposts/NOTES.md`.
+viewer and works reliably. Details in [`reposts/NOTES.md`](reposts/NOTES.md).
 
 ## Bulk script
 
 ### Dry run (on by default)
 
-The bulk scripts for likes, comments, and story replies start with
-`DRY_RUN = true`. In a dry run the script selects one batch, prints what it
-would remove, clears the selection, and stops. **Nothing is deleted.** Check
-the output, then set `DRY_RUN = false` at the top of the script and run it
-again to delete for real.
+Every bulk script (likes, comments, story replies, and the reposts viewer
+script) starts with `DRY_RUN = true`. In a dry run the script selects one
+batch, prints what it would remove, clears the selection, and stops.
+**Nothing is deleted.** Check the output, then set `DRY_RUN = false` at the top
+of the script and run it again to delete for real.
 
 ```js
 const DRY_RUN = true;   // false = actually delete
 ```
+
+The reposts viewer script (`reposts/4-unrepost-via-viewer.js`) works the same
+way: it walks through your reposts, reports each one it would un-repost, and
+changes nothing.
+
+### For contributors
+
+The likes, comments, and story replies bulk scripts are generated from a shared
+engine in [`src/`](src/). Edit `src/`, then run `npm run build` from the repo
+root. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ### Settings
 
