@@ -107,6 +107,20 @@ viewer and works reliably. Details in `scripts/reposts/NOTES.md`.
 
 ## Bulk script
 
+### Dry run (on by default)
+
+The bulk scripts for likes, comments, and story replies start with
+`DRY_RUN = true`. In a dry run the script selects one batch, prints what it
+would remove, clears the selection, and stops. **Nothing is deleted.** Check
+the output, then set `DRY_RUN = false` at the top of the script and run it
+again to delete for real.
+
+```js
+const DRY_RUN = true;   // false = actually delete
+```
+
+### Settings
+
 The bulk scripts share the same settings at the top. The batch size is
 randomized each cycle and the scripts occasionally skip an item or take a
 longer pause, so the pattern looks less automated:

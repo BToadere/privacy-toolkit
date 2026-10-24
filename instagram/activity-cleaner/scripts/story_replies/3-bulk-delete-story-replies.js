@@ -17,6 +17,8 @@
  */
 (async function bulkDeleteStoryReplies() {
   // ===== settings =====
+  const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
+                              // Set to false only after you checked the dry-run output.
   const BATCH_MIN   = 5;      // fewest items selected per cycle (randomized)
   const BATCH_MAX   = 10;     // most items selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
@@ -311,6 +313,7 @@
     // time, so scroll to load more until we reach the target (or run out).
     const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH);
     const skipped = new Set();
+    const picks = []; // selected rows, for the dry-run report
     let sel = 0, emptyScrolls = 0;
     while (sel < target && !window.__STOP__ && emptyScrolls < 4) {
       let picked = 0;
@@ -321,6 +324,7 @@
         if (!btn) continue;
         if (Math.random() < SKIP_CHANCE) { skipped.add(icon); continue; } // stays for a later cycle
         realClick(btn);
+        picks.push(btn);
         sel++;
         picked++;
         await sleep(rnd(450, 1100));
@@ -332,6 +336,21 @@
       }
     }
     if (sel === 0) { console.log("Nothing selectable. Done."); break; }
+
+    if (DRY_RUN) {
+      // Report what this batch WOULD remove, then undo the selection. The
+      // list does not shrink in a dry run, so one batch is all we look at.
+      const describe = (el) => {
+        const text = (el.innerText || "").replace(/\s+/g, " ").trim();
+        const alt = el.querySelector("img[alt]")?.alt || "";
+        return (text || alt || "(no text - media only)").slice(0, 120);
+      };
+      console.log(`%cDRY RUN: this batch would remove ${sel} item(s):`, "color:yellow;font-weight:bold");
+      picks.forEach((el, i) => console.log(`  ${i + 1}. ${describe(el)}`));
+      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); }
+      console.log("%cDRY RUN: selection cleared, nothing was deleted. Set DRY_RUN = false to run for real.", "color:yellow;font-weight:bold");
+      break;
+    }
 
     // Delete + confirm.
     await sleep(1200);
