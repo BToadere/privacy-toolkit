@@ -33,6 +33,8 @@
  */
 (async function unrepostViaViewer() {
   // ===== settings =====
+  const DRY_RUN    = true;  // true = open each popover, report it, close it, move on. Nothing is un-reposted.
+                            // Set to false only after you checked the dry-run output.
   const MAX        = 20;    // how many to un-repost this run
   const MIN_PAUSE  = 2500;  // ms between actions (keep it slow)
   const MAX_PAUSE  = 4000;
@@ -97,6 +99,16 @@
       console.warn("No 'You reposted this / Delete' popover. Stopping (won't risk a re-repost).");
       break;
     }
+    if (DRY_RUN) {
+      // close the popover without touching Delete (or Add)
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      done++;
+      console.log(`DRY RUN: would un-repost ${done}/${MAX}: ${location.href}`);
+      await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+      if (!clickNext()) { console.log("No Next button - reached the last one. Done."); break; }
+      await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
+      continue;
+    }
     realClick(del);
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 15000) : rnd(MIN_PAUSE, MAX_PAUSE));
     done++;
@@ -106,5 +118,6 @@
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 15000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
+  if (DRY_RUN) { console.log(`%cDRY RUN done: ${done} repost(s) found, nothing was changed. Set DRY_RUN = false to run for real.`, "color:yellow;font-weight:bold"); return; }
   console.log(`%cStopped. Un-reposted ${done}. Reload your profile to confirm.`, "color:lime;font-weight:bold");
 })();
