@@ -15,6 +15,7 @@
  * Keep the tab visible. Background tabs get throttled by the browser
  * and the timers slow down.
  */
+/* GENERATED from src/ by tools/build.mjs - edit src/, then run `npm run build`. */
 (async function bulkDeleteStoryReplies() {
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
@@ -50,6 +51,19 @@
   // blocked - especially -1, which never backs out on its own.
   // ====================
 
+  // ===== page-specific selectors and labels =====
+  const PAGE = {
+    noun: "story replies",
+    action: "delete",
+    actionLabel: "Delete",
+    done: "deleted",
+    confirmWait: 1500,
+    awayTab: "Likes",
+    homeTab: "Story replies",
+    findAction: () => [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
+      .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]'),
+  };
+
   window.__STOP__ = false;
   const RETRY_LIMIT = MAX_RETRIES < 0 ? "unlimited" : MAX_RETRIES;
   const RECOVER_LIMIT = RECOVER_500 < 0 ? "unlimited" : RECOVER_500;
@@ -59,8 +73,8 @@
 
   // Watch Instagram's own action requests. A 500 here is almost always rate
   // limiting after a burst, not a bug - we detect it and stop cleanly instead
-  // of misreporting "Nothing left" when the page has actually broken.
-  let actionError = null;   // HTTP error on the real delete action
+  // of misreporting "nothing left" when the page has actually broken.
+  let actionError = null;   // HTTP error on the real action
   let loadMore429 = false;  // 429 on pagination ('load more') this cycle
   const __origFetch = window.fetch;
   window.fetch = function (...a) {
@@ -70,9 +84,9 @@
       p.then(r => {
         if (!r.ok) {
           if (u.includes("_next")) {
-            if (r.status === 429) { loadMore429 = true; console.warn("HTTP 429 registered on 'load more' - Instagram is throttling (the deletes themselves still go through)."); }
+            if (r.status === 429) { loadMore429 = true; console.warn("HTTP 429 registered on 'load more' - Instagram is throttling (the actions themselves still go through)."); }
             else console.warn(`Note: 'load more' failed (HTTP ${r.status}) - continuing.`);
-          } else actionError = r.status; // error on the real delete action
+          } else actionError = r.status; // error on the real action
         }
       }).catch(() => { actionError = "network"; });
     }
@@ -83,14 +97,19 @@
     ["mousedown", "mouseup", "click"].forEach(t =>
       el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, buttons: 1 })));
   };
-  const findSelect = () => [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
-    .find(el => el.innerText?.trim() === "Select");
+  // Instagram dropped the data-bloks-name wrapper around the Select label
+  // (recorded 2026-07-27: it's now a bare <span>, bloks/aria/role all null, no
+  // role=button parent). Match on the element's OWN text instead - ownText only
+  // counts direct text nodes, so this hits the innermost label span and not
+  // some big container whose innerText happens to include "Select". Clicking
+  // the span works; the event bubbles to the real handler.
+  const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
+  const findSelect = () => [...document.querySelectorAll('span,div')]
+    .find(el => ownText(el) === "Select")
+    || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
+      .find(el => el.innerText?.trim() === "Select")
+    || null;
   const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
-  const findDelete = () => {
-    const span = [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
-      .find(s => s.innerText?.trim() === "Delete");
-    return span?.closest('div[style*="pointer-events: auto"]');
-  };
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
 
@@ -135,10 +154,9 @@
     return false;
   };
 
-  // "Something went wrong - There was a problem deleting some or all of your
-  // content." Instagram shows this modal after a throttled action, but the
-  // replies usually ARE removed. It also swallows every click behind it (the
-  // recovery tab switch included), so dismiss it with its own OK button.
+  // "Something went wrong - There was a problem removing some or all of your
+  // content." Instagram shows this modal after a throttled action. The items
+  // usually ARE removed; the modal just blocks the page until OK is pressed.
   // Its OK is a plain <button> with no bloks/aria/role attributes (recorded
   // 2026-07-20), so the same focus+click used for the confirm dialog works.
   // Clicking it the millisecond it appears does NOT bring the list back (the
@@ -193,12 +211,12 @@
     console.warn(`${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     await dismissError(); // the modal would eat the tab clicks
-    const away = findTab("Likes");
-    if (away) { console.log("%cRecovery: switching to the Likes tab...", "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
-    else console.warn("Recovery: Likes tab not found - cannot switch away.");
-    const home = findTab("Story replies");
-    if (home) { console.log("%cRecovery: switching back to the Story replies tab...", "color:orange;font-weight:bold"); realClick(home); await sleep(3500); }
-    else console.warn("Recovery: Story replies tab not found - the page may be too broken.");
+    const away = findTab(PAGE.awayTab);
+    if (away) { console.log(`%cRecovery: switching to the ${PAGE.awayTab} tab...`, "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
+    else console.warn(`Recovery: ${PAGE.awayTab} tab not found - cannot switch away.`);
+    const home = findTab(PAGE.homeTab);
+    if (home) { console.log(`%cRecovery: switching back to the ${PAGE.homeTab} tab...`, "color:orange;font-weight:bold"); realClick(home); await sleep(3500); }
+    else console.warn(`Recovery: ${PAGE.homeTab} tab not found - the page may be too broken.`);
     console.log("%cRecovery: tab switch done - re-checking the list.", "color:orange;font-weight:bold");
     return true;
   };
@@ -263,13 +281,13 @@
     if (icons.length === 0) {
       if (!findSelect()) {
         // Select still gone after the retries: either truly empty, or the page
-        // broke after a throttled action. Instagram's 500 is slow (~15-20s);
-        // if we were mid-run wait for it before deciding.
-        // ...and watch for the error dialog, which often shows up without any
-        // failed request at all. If it does, press OK and start over.
+        // broke after a throttled action. Instagram's 500 is slow (~15-20s), so
+        // if we were mid-run give it a moment to arrive before deciding - and
+        // watch for the error dialog, which often shows up without any failed
+        // request at all. If it does, click OK and carry on immediately.
         if (total > 0) {
           for (let i = 0; i < 18 && !actionError; i++) {
-            if (await dismissError()) continue cycles; // retries and all
+            if (await dismissError()) continue cycles; // start the cycle over, retries and all
             await sleep(1000);
           }
         }
@@ -288,7 +306,7 @@
             console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
             if (await tryRecover("The list disappeared without a failed request")) continue;
           }
-          console.log("Select gone. Either everything is removed, or Instagram rate-limited you (the page can break silently). If items remain, reload and wait before running again.");
+          console.log(`Select gone. Either all ${PAGE.noun} are removed, or Instagram rate-limited you (the page can break silently). If ${PAGE.noun} remain, reload and wait before running again.`);
         }
       } else {
         // Selection mode is available but no rows are loaded. After a
@@ -298,7 +316,7 @@
         realClick(findSelect());
         await sleep(5000);
         if (getIcons().length > 0) continue;
-        console.log("Nothing left.");
+        console.log(`No ${PAGE.noun} left.`);
       }
       break;
     }
@@ -352,15 +370,15 @@
       break;
     }
 
-    // Delete + confirm.
+    // Action (Unlike / Delete) + confirm.
     await sleep(1200);
-    const deleteBtn = findDelete();
-    if (!deleteBtn) { console.warn("Delete control not found. Stopped."); break; }
-    realClick(deleteBtn);
+    const actionBtn = PAGE.findAction();
+    if (!actionBtn) { console.warn(`${PAGE.actionLabel} button not found. Stopped.`); break; }
+    realClick(actionBtn);
 
-    await sleep(1500);
+    await sleep(PAGE.confirmWait);
     const confirmBtn = [...document.querySelectorAll("button")]
-      .find(b => b.innerText?.trim() === "Delete");
+      .find(b => b.innerText?.trim() === PAGE.actionLabel);
     if (!confirmBtn) { console.warn("Confirm dialog not found. Stopped."); break; }
     confirmBtn.focus();
     await sleep(100);
@@ -373,17 +391,17 @@
       // 500 (or network error) on the real action: the page usually breaks here
       const err = actionError;
       if (await tryRecover(err)) continue;
-      console.warn(`Instagram returned HTTP ${err} on the delete action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
+      console.warn(`Instagram returned HTTP ${err} on the ${PAGE.action} action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
       break;
     }
     if (actionError === 429) {
       errorStreak++;
       if (MAX_RETRIES >= 0 && errorStreak > MAX_RETRIES) {
-        console.warn(`HTTP 429 on the delete action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
+        console.warn(`HTTP 429 on the ${PAGE.action} action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
         break;
       }
       const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
-      console.warn(`HTTP 429 registered on the delete action (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s, then retrying remaining items. Warning: continuing after a 429 can result in a block.`);
+      console.warn(`HTTP 429 registered on the ${PAGE.action} action (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s, then retrying the remaining ${PAGE.noun}. Warning: continuing after a 429 can result in a block.`);
       actionError = null;
       loadMore429 = false; // one backoff covers this throttle episode
       await sleep(back);
@@ -392,10 +410,10 @@
 
     total += sel;
     cycle++;
-    console.log(`Cycle ${cycle}: deleted ${sel} | total ${total}/${MAX_TOTAL}`);
+    console.log(`Cycle ${cycle}: ${PAGE.done} ${sel} | total ${total}/${MAX_TOTAL}`);
 
     if (loadMore429) {
-      // pagination got throttled; the deletes went through, but Instagram is
+      // pagination got throttled; the actions went through, but Instagram is
       // telling us to slow down - back off once, stop if it keeps happening
       loadMore429 = false;
       errorStreak++;
@@ -419,5 +437,5 @@
   }
 
   window.fetch = __origFetch;
-  console.log(`%cStopped. Deleted ${total} story replies in ${cycle} cycles.`, "color:lime;font-weight:bold");
+  console.log(`%cStopped. ${PAGE.done[0].toUpperCase() + PAGE.done.slice(1)} ${total} ${PAGE.noun} in ${cycle} cycles.`, "color:lime;font-weight:bold");
 })();

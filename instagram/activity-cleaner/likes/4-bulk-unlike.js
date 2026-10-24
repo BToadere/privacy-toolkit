@@ -16,6 +16,7 @@
  * Keep the tab visible. Background tabs get throttled by the browser
  * and the timers slow down.
  */
+/* GENERATED from src/ by tools/build.mjs - edit src/, then run `npm run build`. */
 (async function bulkUnlike() {
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
@@ -51,6 +52,19 @@
   // blocked - especially -1, which never backs out on its own.
   // ====================
 
+  // ===== page-specific selectors and labels =====
+  const PAGE = {
+    noun: "likes",
+    action: "unlike",          // used in log messages
+    actionLabel: "Unlike",     // text on the action button and on the confirm button
+    done: "removed",
+    confirmWait: 1000,         // ms to wait for the confirm dialog
+    awayTab: "Comments",       // recovery: switch to this tab ...
+    homeTab: "Likes",          // ... and back to this one
+    findAction: () => [...document.querySelectorAll("span")]
+      .find(el => el.innerText?.trim() === "Unlike")?.closest("button, div"),
+  };
+
   window.__STOP__ = false;
   const RETRY_LIMIT = MAX_RETRIES < 0 ? "unlimited" : MAX_RETRIES;
   const RECOVER_LIMIT = RECOVER_500 < 0 ? "unlimited" : RECOVER_500;
@@ -60,8 +74,8 @@
 
   // Watch Instagram's own action requests. A 500 here is almost always rate
   // limiting after a burst, not a bug - we detect it and stop cleanly instead
-  // of misreporting "No likes left" when the page has actually broken.
-  let actionError = null;   // HTTP error on the real unlike action
+  // of misreporting "nothing left" when the page has actually broken.
+  let actionError = null;   // HTTP error on the real action
   let loadMore429 = false;  // 429 on pagination ('load more') this cycle
   const __origFetch = window.fetch;
   window.fetch = function (...a) {
@@ -71,9 +85,9 @@
       p.then(r => {
         if (!r.ok) {
           if (u.includes("_next")) {
-            if (r.status === 429) { loadMore429 = true; console.warn("HTTP 429 registered on 'load more' - Instagram is throttling (the unlikes themselves still go through)."); }
+            if (r.status === 429) { loadMore429 = true; console.warn("HTTP 429 registered on 'load more' - Instagram is throttling (the actions themselves still go through)."); }
             else console.warn(`Note: 'load more' failed (HTTP ${r.status}) - continuing.`);
-          } else actionError = r.status; // error on the real unlike action
+          } else actionError = r.status; // error on the real action
         }
       }).catch(() => { actionError = "network"; });
     }
@@ -92,7 +106,10 @@
   // the span works; the event bubbles to the real handler.
   const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
   const findSelect = () => [...document.querySelectorAll('span,div')]
-    .find(el => ownText(el) === "Select") || null;
+    .find(el => ownText(el) === "Select")
+    || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
+      .find(el => el.innerText?.trim() === "Select")
+    || null;
   const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
@@ -138,8 +155,8 @@
     return false;
   };
 
-  // "Something went wrong - There was a problem unliking some or all of your
-  // content." Instagram shows this modal after a throttled action. The likes
+  // "Something went wrong - There was a problem removing some or all of your
+  // content." Instagram shows this modal after a throttled action. The items
   // usually ARE removed; the modal just blocks the page until OK is pressed.
   // Its OK is a plain <button> with no bloks/aria/role attributes (recorded
   // 2026-07-20), so the same focus+click used for the confirm dialog works.
@@ -195,12 +212,12 @@
     console.warn(`${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     await dismissError(); // the modal would eat the tab clicks
-    const away = findTab("Comments");
-    if (away) { console.log("%cRecovery: switching to the Comments tab...", "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
-    else console.warn("Recovery: Comments tab not found - cannot switch away.");
-    const home = findTab("Likes");
-    if (home) { console.log("%cRecovery: switching back to the Likes tab...", "color:orange;font-weight:bold"); realClick(home); await sleep(3500); }
-    else console.warn("Recovery: Likes tab not found - the page may be too broken.");
+    const away = findTab(PAGE.awayTab);
+    if (away) { console.log(`%cRecovery: switching to the ${PAGE.awayTab} tab...`, "color:orange;font-weight:bold"); realClick(away); await sleep(2500); }
+    else console.warn(`Recovery: ${PAGE.awayTab} tab not found - cannot switch away.`);
+    const home = findTab(PAGE.homeTab);
+    if (home) { console.log(`%cRecovery: switching back to the ${PAGE.homeTab} tab...`, "color:orange;font-weight:bold"); realClick(home); await sleep(3500); }
+    else console.warn(`Recovery: ${PAGE.homeTab} tab not found - the page may be too broken.`);
     console.log("%cRecovery: tab switch done - re-checking the list.", "color:orange;font-weight:bold");
     return true;
   };
@@ -290,7 +307,7 @@
             console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
             if (await tryRecover("The list disappeared without a failed request")) continue;
           }
-          console.log("Select gone. Either all likes are removed, or Instagram rate-limited you (the page can break silently). If likes remain, reload and wait before running again.");
+          console.log(`Select gone. Either all ${PAGE.noun} are removed, or Instagram rate-limited you (the page can break silently). If ${PAGE.noun} remain, reload and wait before running again.`);
         }
       } else {
         // Selection mode is available but no rows are loaded. After a
@@ -300,7 +317,7 @@
         realClick(findSelect());
         await sleep(5000);
         if (getIcons().length > 0) continue;
-        console.log("No likes left.");
+        console.log(`No ${PAGE.noun} left.`);
       }
       break;
     }
@@ -354,16 +371,15 @@
       break;
     }
 
-    // Unlike + confirm.
+    // Action (Unlike / Delete) + confirm.
     await sleep(1200);
-    const unlikeBtn = [...document.querySelectorAll("span")]
-      .find(el => el.innerText?.trim() === "Unlike")?.closest("button, div");
-    if (!unlikeBtn) { console.warn("Unlike button not found. Stopped."); break; }
-    realClick(unlikeBtn);
+    const actionBtn = PAGE.findAction();
+    if (!actionBtn) { console.warn(`${PAGE.actionLabel} button not found. Stopped.`); break; }
+    realClick(actionBtn);
 
-    await sleep(1000);
+    await sleep(PAGE.confirmWait);
     const confirmBtn = [...document.querySelectorAll("button")]
-      .find(b => b.innerText?.trim() === "Unlike");
+      .find(b => b.innerText?.trim() === PAGE.actionLabel);
     if (!confirmBtn) { console.warn("Confirm dialog not found. Stopped."); break; }
     confirmBtn.focus();
     await sleep(100);
@@ -376,17 +392,17 @@
       // 500 (or network error) on the real action: the page usually breaks here
       const err = actionError;
       if (await tryRecover(err)) continue;
-      console.warn(`Instagram returned HTTP ${err} on the unlike action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
+      console.warn(`Instagram returned HTTP ${err} on the ${PAGE.action} action - hard stop. Reload and wait 30-60+ min (sometimes hours) before trying again.`);
       break;
     }
     if (actionError === 429) {
       errorStreak++;
       if (MAX_RETRIES >= 0 && errorStreak > MAX_RETRIES) {
-        console.warn(`HTTP 429 on the unlike action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
+        console.warn(`HTTP 429 on the ${PAGE.action} action again (${errorStreak}x) - you are rate limited. Stopping. Reload and wait 30-60+ min before trying again.`);
         break;
       }
       const back = rnd(BACKOFF_MIN, BACKOFF_MAX);
-      console.warn(`HTTP 429 registered on the unlike action (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s, then retrying still-liked posts. Warning: continuing after a 429 can result in a block.`);
+      console.warn(`HTTP 429 registered on the ${PAGE.action} action (retry ${errorStreak}/${RETRY_LIMIT}) - backing off ~${Math.round(back / 1000)}s, then retrying the remaining ${PAGE.noun}. Warning: continuing after a 429 can result in a block.`);
       actionError = null;
       loadMore429 = false; // one backoff covers this throttle episode
       await sleep(back);
@@ -395,10 +411,10 @@
 
     total += sel;
     cycle++;
-    console.log(`Cycle ${cycle}: removed ${sel} | total ${total}/${MAX_TOTAL}`);
+    console.log(`Cycle ${cycle}: ${PAGE.done} ${sel} | total ${total}/${MAX_TOTAL}`);
 
     if (loadMore429) {
-      // pagination got throttled; the unlikes went through, but Instagram is
+      // pagination got throttled; the actions went through, but Instagram is
       // telling us to slow down - back off once, stop if it keeps happening
       loadMore429 = false;
       errorStreak++;
@@ -422,5 +438,5 @@
   }
 
   window.fetch = __origFetch;
-  console.log(`%cStopped. Removed ${total} likes in ${cycle} cycles.`, "color:lime;font-weight:bold");
+  console.log(`%cStopped. ${PAGE.done[0].toUpperCase() + PAGE.done.slice(1)} ${total} ${PAGE.noun} in ${cycle} cycles.`, "color:lime;font-weight:bold");
 })();
