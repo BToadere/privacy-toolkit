@@ -35,7 +35,7 @@
   // ===== settings =====
   const DRY_RUN    = true;  // true = open each popover, report it, close it, move on. Nothing is un-reposted.
                             // Set to false only after you checked the dry-run output.
-  const MAX        = 20;    // how many to un-repost this run
+  const MAX        = 100000; // how many to un-repost this run - effectively 'all'; it stops on any error
   const MIN_PAUSE  = 2500;  // ms between actions (keep it slow)
   const MAX_PAUSE  = 4000;
   const LONG_BREAK = 0.15;  // chance of a longer human-like pause between actions

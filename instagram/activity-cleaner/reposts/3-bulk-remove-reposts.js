@@ -31,13 +31,13 @@
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
                               // Set to false only after you checked the dry-run output.
-  const BATCH_MIN   = 4;      // fewest reposts selected per cycle (randomized)
-  const BATCH_MAX   = 7;      // most reposts selected per cycle (randomized)
+  const BATCH_MIN   = 20;     // fewest reposts selected per cycle (randomized)
+  const BATCH_MAX   = 30;     // most reposts selected per cycle (randomized)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
-  const MAX_TOTAL   = 50;     // stop after this many this session
-  const MIN_PAUSE   = 18000;
-  const MAX_PAUSE   = 30000;
-  const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+  const MAX_TOTAL   = 100000; // stop after this many this session - effectively 'all'
+  const MIN_PAUSE   = 15000;
+  const MAX_PAUSE   = 22000;
+  const LONG_BREAK  = 0.1;    // chance of a longer human-like pause between cycles
   // ====================
 
   window.__STOP__ = false;

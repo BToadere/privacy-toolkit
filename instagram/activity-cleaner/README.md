@@ -141,16 +141,16 @@ randomized each cycle and the scripts occasionally skip an item or take a
 longer pause, so the pattern looks less automated:
 
 ```js
-const BATCH_MIN   = 5;      // fewest selected per cycle (randomized)
-const BATCH_MAX   = 10;     // most selected per cycle (randomized)
+const BATCH_MIN   = 20;     // fewest selected per cycle (randomized)
+const BATCH_MAX   = 30;     // most selected per cycle (randomized)
 const MAX_BATCH   = 100;    // hard cap per cycle (see below)
 const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
 const CLICK_MIN   = 250;    // pause between selection clicks (ms) - selecting sends no request
 const CLICK_MAX   = 600;
-const MAX_TOTAL   = 200;    // stop after this many this session
-const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
-const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
-const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+const MAX_TOTAL   = 100000; // stop after this many this session (effectively all)
+const MIN_PAUSE   = 15000;  // min pause between cycles (ms)
+const MAX_PAUSE   = 22000;  // max pause between cycles (ms)
+const LONG_BREAK  = 0.1;    // chance of a longer human-like pause between cycles
 const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
 const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
 const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
@@ -160,12 +160,12 @@ const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the 
 const EMPTY_RECOVERIES = 3; // restore attempts when the list vanishes with no failed request
 ```
 
-The likes script ships faster settings, validated on a real account
-(2026-10-25): batches of 20-30, 15-22s pauses, fewer long breaks, and
-`MAX_TOTAL = 100000` so it removes everything in one go. Each cycle is one
-request no matter how many items it holds, so bigger batches go faster
-without hitting Instagram more often. The comments and story replies scripts
-keep the cautious values above until they are validated the same way.
+These are production values: one run removes everything at roughly 2,500
+items an hour (likes validated on a real account, 2026-10-25). Each cycle is
+one request no matter how many items it holds, so bigger batches go faster
+without hitting Instagram more often. The reposts scripts use the same
+values; the viewer script (`4-unrepost-via-viewer.js`) goes one by one with
+`MAX = 100000`.
 Leave `MAX_RETRIES` and `RECOVER_500` at 1 - setting them to -1 keeps
 sending actions after Instagram has told you to stop, which is how an
 account gets an action block (typically 24-48h, longer if it repeats).
