@@ -142,8 +142,11 @@
   // label fall back to their text plus thumbnail.
   const rowKey = (row) => {
     const label = row.getAttribute("aria-label");
-    // comments: "user commented 3h, text" - the age ticks over mid-run
-    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",");
+    // comments: "user commented 3h, text" - the age ticks over mid-run.
+    // The thumbnail is added because some labels are not unique on their own
+    // (reposts: "Video, shared October 11, 2026" - no author).
+    const img = row.querySelector("img")?.src || "";
+    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",") + "|" + img;
     return (row.innerText || "").replace(/\s+/g, " ").trim() + "|" + (row.querySelector("img")?.src || "");
   };
   // Click the rows with these keys that are still on the page (used to undo a

@@ -70,7 +70,9 @@
     awayTab: "Likes",
     homeTab: "Reposts",
     path: "/your_activity/interactions/reposts", // the script refuses to act anywhere else
-    isRow: null,               // row label not recorded yet - only the URL is checked
+    // a repost row: "Video, shared October 11, 2026" - no author, unlike a
+    // liked post ("..., by @user, shared ...") (2026-10-25)
+    isRow: (label) => /, shared /.test(label) && !/ by @/.test(label),
     // New UI (2026-10-25): a role=button labelled "Delete"; the clickable one
     // is the inner pointer-events: auto copy. Old UI: the bloks TextSpan's
     // pointer-events container.

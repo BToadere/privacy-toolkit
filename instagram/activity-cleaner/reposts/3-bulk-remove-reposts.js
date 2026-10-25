@@ -71,7 +71,9 @@
     awayTab: "Likes",
     homeTab: "Reposts",
     path: "/your_activity/interactions/reposts", // the script refuses to act anywhere else
-    isRow: null,               // row label not recorded yet - only the URL is checked
+    // a repost row: "Video, shared October 11, 2026" - no author, unlike a
+    // liked post ("..., by @user, shared ...") (2026-10-25)
+    isRow: (label) => /, shared /.test(label) && !/ by @/.test(label),
     // New UI (2026-10-25): a role=button labelled "Delete"; the clickable one
     // is the inner pointer-events: auto copy. Old UI: the bloks TextSpan's
     // pointer-events container.
@@ -149,8 +151,11 @@
   // label fall back to their text plus thumbnail.
   const rowKey = (row) => {
     const label = row.getAttribute("aria-label");
-    // comments: "user commented 3h, text" - the age ticks over mid-run
-    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",");
+    // comments: "user commented 3h, text" - the age ticks over mid-run.
+    // The thumbnail is added because some labels are not unique on their own
+    // (reposts: "Video, shared October 11, 2026" - no author).
+    const img = row.querySelector("img")?.src || "";
+    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",") + "|" + img;
     return (row.innerText || "").replace(/\s+/g, " ").trim() + "|" + (row.querySelector("img")?.src || "");
   };
   // Click the rows with these keys that are still on the page (used to undo a
