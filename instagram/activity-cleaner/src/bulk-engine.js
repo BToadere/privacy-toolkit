@@ -359,7 +359,7 @@
         pickKeys.push(rowKey(btn));
         sel++;
         picked++;
-        await sleep(rnd(450, 1100));
+        await sleep(rnd(CLICK_MIN, CLICK_MAX));
       }
       if (sel < target) {
         window.scrollBy(0, 1600);            // load more rows

@@ -25,6 +25,8 @@
   const BATCH_MAX   = 10;     // most items selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
+  const CLICK_MIN   = 250;    // pause between selection clicks (ms). Selecting is local to
+  const CLICK_MAX   = 600;    // the page - no request is sent until the action itself
   const MAX_TOTAL   = 200;    // stop after this many this session (rate-limit guard)
   const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
   const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
@@ -426,7 +428,7 @@
         pickKeys.push(rowKey(btn));
         sel++;
         picked++;
-        await sleep(rnd(450, 1100));
+        await sleep(rnd(CLICK_MIN, CLICK_MAX));
       }
       if (sel < target) {
         window.scrollBy(0, 1600);            // load more rows
