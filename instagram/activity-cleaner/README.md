@@ -130,7 +130,7 @@ changes nothing.
 
 ### For contributors
 
-The likes, comments, and story replies bulk scripts are generated from a shared
+The likes, comments, story replies and reposts bulk scripts are generated from a shared
 engine in [`src/`](src/). Edit `src/`, then run `npm run build` from the repo
 root. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 

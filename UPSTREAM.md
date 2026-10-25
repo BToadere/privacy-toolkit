@@ -12,7 +12,7 @@ and its author are preserved here.
 Since the import, `activity-cleaner` changed its layout:
 
 - the `scripts/` level is gone (`scripts/likes/` is now `likes/`, and so on);
-- the three Select-mode bulk scripts are generated from one shared engine
+- the four Select-mode bulk scripts (likes, comments, story replies, reposts) are generated from one shared engine
   (`src/bulk-engine.js`) plus a small per-page template (`src/*.bulk.js`);
 - every bulk script has a `DRY_RUN` mode, on by default.
 

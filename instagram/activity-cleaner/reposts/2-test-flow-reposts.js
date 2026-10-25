@@ -6,29 +6,15 @@
  * them, finds the action button WITHOUT clicking it, then clears the selection.
  * If every line says OK, the bulk script's selectors still match the page.
  *
- * Sort the list "Oldest to newest" first (Sort & filter) - see NOTES.md.
- *
  * Run on: https://www.instagram.com/your_activity/interactions/reposts
  */
 (async function testFlowReposts() {
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
-  // the reposts page only reacts to a full pointer+mouse sequence on the leaf
   const realClick = (el) => {
     el.scrollIntoView({ block: "center" });
-    const r = el.getBoundingClientRect();
-    const o = {
-      bubbles: true, cancelable: true, composed: true, view: window, button: 0, buttons: 1,
-      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2,
-      pointerId: 1, pointerType: "mouse", isPrimary: true
-    };
-    el.dispatchEvent(new PointerEvent("pointerover", o));
-    el.dispatchEvent(new PointerEvent("pointerdown", o));
-    el.dispatchEvent(new MouseEvent("mousedown", o));
-    if (el.focus) el.focus();
-    el.dispatchEvent(new PointerEvent("pointerup", o));
-    el.dispatchEvent(new MouseEvent("mouseup", o));
-    el.dispatchEvent(new MouseEvent("click", o));
+    ["mousedown", "mouseup", "click"].forEach(t =>
+      el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, buttons: 1 })));
   };
   // empty circles: new UI ([data-testid] + mask style) or the old bloks one
   const getIcons = () => [...document.querySelectorAll('[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]')];
@@ -50,7 +36,8 @@
   // 1. selection mode
   let icons = getIcons();
   if (!icons.length) {
-    const sb = [...document.querySelectorAll('span[data-bloks-name="bk.components.Text"]')].find(s => ownText(s) === "Select");
+    const sb = [...document.querySelectorAll("span,div")].find(el => ownText(el) === "Select")
+      || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')].find(el => el.innerText?.trim() === "Select");
     if (!sb) return fail("'Select' not found - reload the page, or Instagram changed it.");
     realClick(sb);
     await sleep(1800);
@@ -80,8 +67,9 @@
   picks.forEach((row, i) => console.log(`        ${i + 1}. ${(row.getAttribute("aria-label") || (row.innerText || "").replace(/\s+/g, " ").trim()).slice(0, 100) || "(media only)"}`));
 
   // 3. the action button the bulk script presses - located, NOT clicked
-  const action = [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
-    .find(s => ownText(s) === "Delete" && s.closest('div[role="button"][aria-label="Delete"]'));
+  const action = document.querySelector('div[role="button"][aria-label="Delete"][style*="pointer-events: auto"]')
+    || [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
+      .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]');
   if (action) ok("'Delete' button found (not clicked)");
   else pass = fail("'Delete' button not found - the bulk script would stop here.");
 

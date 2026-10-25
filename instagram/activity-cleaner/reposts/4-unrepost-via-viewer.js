@@ -27,8 +27,9 @@
  *   2. Click the FIRST repost to open it in the viewer (Next arrow visible).
  *   3. Paste this script and press Enter.
  *
- * Start slow: MAX is small on purpose. Reposts rate-limit easily, especially
- * after lots of other deleting the same day.
+ * It goes one by one (each un-repost is its own request), so the pause between
+ * actions is what keeps it under Instagram's radar - leave it as is. It stops
+ * on its own on any HTTP error or when an un-repost does not take.
  * Stop any time:  window.__STOP__ = true
  */
 (async function unrepostViaViewer() {
@@ -100,6 +101,7 @@
   };
 
   let done = 0;
+  let allDone = false; // reached the end of the reposts - picks the final banner
   console.log("%cStart (viewer popover flow). Stop: window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   while (!window.__STOP__ && done < MAX) {
@@ -111,7 +113,7 @@
       await sleep(500);
       rs = repostSvg();
     }
-    if (!rs) { console.log("No Repost icon after waiting ~6s - reached the end. Done."); break; }
+    if (!rs) { console.log("No Repost icon after waiting ~6s - reached the end."); allDone = true; break; }
 
     // open the popover
     realClick(rs.closest('[role="button"]') || rs.parentElement || rs);
@@ -128,7 +130,7 @@
       done++;
       console.log(`DRY RUN: would un-repost ${done}/${MAX}: ${location.href}`);
       await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
-      if (!clickNext()) { console.log("No Next button - reached the last one. Done."); break; }
+      if (!clickNext()) { console.log("No Next button - reached the last one."); allDone = true; break; }
       await sleep(rnd(MIN_PAUSE, MAX_PAUSE));
       continue;
     }
@@ -146,11 +148,15 @@
     done++;
     console.log(`un-reposted ${done}/${MAX}: ${location.href}`);
 
-    if (!clickNext()) { console.log("No Next button - reached the last one. Done."); break; }
+    if (!clickNext()) { console.log("No Next button - reached the last one."); allDone = true; break; }
     await sleep(Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 15000) : rnd(MIN_PAUSE, MAX_PAUSE));
   }
 
   window.fetch = __origFetch;
-  if (DRY_RUN) { console.log(`%cDRY RUN done: ${done} repost(s) found, nothing was changed. Set DRY_RUN = false to run for real.`, "color:yellow;font-weight:bold"); return; }
-  console.log(`%cStopped. Un-reposted ${done}. Reload your profile to confirm.`, "color:lime;font-weight:bold");
+  // One unmistakable last line: the script is over either way.
+  const big = "font-weight:bold;font-size:14px;color:";
+  if (DRY_RUN) console.log(`%c===== DRY RUN FINISHED - ${done} repost(s) found, nothing was changed. The script is no longer running. =====`, big + "lime");
+  else if (allDone) console.log(`%c===== DONE - un-reposted ${done}, reached the last repost. Reload your profile to confirm. The script is no longer running. =====`, big + "lime");
+  else if (done >= MAX) console.log(`%c===== DONE - limit reached (un-reposted ${done}). Run it again for the rest. =====`, big + "lime");
+  else console.log(`%c===== STOPPED - un-reposted ${done}. Some may remain; see the message above for why. The script is no longer running. =====`, big + "orange");
 })();
