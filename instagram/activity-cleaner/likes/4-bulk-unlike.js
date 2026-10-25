@@ -22,14 +22,16 @@
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
                               // Set to false only after you checked the dry-run output.
   const SCAN_LIMIT  = 1000;   // dry run: count at most this many before reporting (each scroll is a request)
-  const BATCH_MIN   = 5;      // fewest likes selected per cycle (randomized)
-  const BATCH_MAX   = 10;     // most likes selected per cycle (randomized)
+  const BATCH_MIN   = 20;     // fewest likes selected per cycle (randomized)
+  const BATCH_MAX   = 30;     // most likes selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
-  const MAX_TOTAL   = 200;    // stop after this many likes this session (rate-limit guard)
-  const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
-  const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
-  const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+  const CLICK_MIN   = 250;    // pause between selection clicks (ms). Selecting is local to
+  const CLICK_MAX   = 600;    // the page - no request is sent until the action itself
+  const MAX_TOTAL   = 100000; // stop after this many likes this session - effectively 'all'; the error checks below stop the run if Instagram pushes back
+  const MIN_PAUSE   = 15000;  // min pause between cycles (ms)
+  const MAX_PAUSE   = 22000;  // max pause between cycles (ms)
+  const LONG_BREAK  = 0.1;    // chance of a longer human-like pause between cycles
   const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
   const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
   const SORT_ORDER = "auto";  // "auto" = keep whatever the page is set to when you start;
@@ -62,6 +64,9 @@
     confirmWait: 1000,         // ms to wait for the confirm dialog
     awayTab: "Comments",       // recovery: switch to this tab ...
     homeTab: "Likes",          // ... and back to this one
+    path: "/your_activity/interactions/likes", // the script refuses to act anywhere else
+    // a liked post row: "Video, 3 of 18, by @user, shared ..." (2026-10-25)
+    isRow: (label) => /, \d+ of \d+, by @/.test(label),
     findAction: () => [...document.querySelectorAll("span")]
       .find(el => el.innerText?.trim() === "Unlike")?.closest("button, div"),
   };
@@ -111,12 +116,48 @@
     || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
       .find(el => el.innerText?.trim() === "Select")
     || null;
-  const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
-  // A row's identity for counting. The list is virtualized (rows are dropped
-  // and re-created while scrolling), so DOM nodes cannot be used as keys -
-  // the row's text plus its thumbnail is stable enough to tell them apart.
-  const rowKey = (row) => (row.innerText || "").replace(/\s+/g, " ").trim()
-    + "|" + (row.querySelector("img")?.src || "");
+  // Empty selection circles. Instagram dropped the bloks attributes here
+  // (recorded 2026-10-25): the circle is now a plain div with the
+  // circle__outline mask inside [data-testid="bulk_action_checkbox"]. The old
+  // bloks selector stays as a fallback for accounts still on the old UI.
+  const getIcons = () => document.querySelectorAll(
+    '[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
+  // The clickable row around a circle. The circle sits in its own
+  // role=button ("Toggle checkbox", pointer-events: none); the row is the
+  // next role=button up, labelled with the post ("Video, 3 of 18, by @x, ...").
+  const rowOf = (el) => {
+    let row = el.closest('[role="button"]');
+    while (row && row.getAttribute("aria-label") === "Toggle checkbox") row = row.parentElement?.closest('[role="button"]');
+    return row || null;
+  };
+  // Every row on the page, selected or not.
+  const allRows = () => [...document.querySelectorAll(
+    '[data-testid="bulk_action_checkbox"], div[data-bloks-name="ig.components.Icon"][style*="circle"]')]
+    .map(rowOf).filter(Boolean);
+  // A row's identity. The list is virtualized and React reuses row nodes, so
+  // DOM nodes cannot be used as keys. The row label names the post; its
+  // "N of M" position shifts as items go, so it is dropped. Rows without a
+  // label fall back to their text plus thumbnail.
+  const rowKey = (row) => {
+    const label = row.getAttribute("aria-label");
+    // comments: "user commented 3h, text" - the age ticks over mid-run.
+    // The thumbnail is added because some labels are not unique on their own
+    // (reposts: "Video, shared October 11, 2026" - no author).
+    const img = row.querySelector("img")?.src || "";
+    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",") + "|" + img;
+    return (row.innerText || "").replace(/\s+/g, " ").trim() + "|" + (row.querySelector("img")?.src || "");
+  };
+  // Click the rows with these keys that are still on the page (used to undo a
+  // selection - never by node, which may now show a different post).
+  const clickRowsByKey = async (keys) => {
+    const want = new Set(keys);
+    for (const row of allRows()) {
+      if (!want.has(rowKey(row))) continue;
+      want.delete(rowKey(row));
+      realClick(row);
+      await sleep(rnd(300, 600));
+    }
+  };
   // Dry run only: scroll through the list and count the rows, up to SCAN_LIMIT
   // (every scroll is a 'load more' request, so the scan is capped too). Stops
   // early on a 429 - counting is not worth getting throttled for.
@@ -128,7 +169,7 @@
     while (seen.size < SCAN_LIMIT && still < 4 && !window.__STOP__ && !loadMore429) {
       const before = seen.size;
       for (const icon of getIcons()) {
-        const row = icon.closest('[role="button"]');
+        const row = rowOf(icon);
         if (row) seen.add(rowKey(row));
       }
       still = seen.size === before ? still + 1 : 0;
@@ -230,14 +271,20 @@
   // Counts only the tab switches that did NOT bring the list back (see the 429
   // case below); a genuinely empty list must still end the run.
   let emptyRecoveries = 0;
+  // err: an HTTP status (counts against RECOVER_500), or null for the
+  // empty-list case, whose budget (EMPTY_RECOVERIES) the caller tracks.
   const tryRecover = async (err) => {
     actionError = null;
     loadMore429 = false;
-    recoverTries++;
-    if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
+    if (err !== null) {
+      recoverTries++;
+      if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
+    }
     const wait = rnd(RECOVER_MIN, RECOVER_MAX);
     const what = typeof err === "number" ? `HTTP ${err}` : err; // callers pass a status or a reason
-    console.warn(`${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
+    console.warn(err === null
+      ? `Waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload.`
+      : `${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     await dismissError(); // the modal would eat the tab clicks
     const away = findTab(PAGE.awayTab);
@@ -265,10 +312,27 @@
   }
 
   let total = 0, cycle = 0, errorStreak = 0, noEffect = 0;
+  let ranOut = false;   // the last batch emptied the list (it found fewer rows than it wanted)
+  let allDone = false;  // set when we are sure nothing is left - picks the final banner
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
+
+  // Never act on the wrong list. The recovery switches tabs (likes <->
+  // comments); if it ever failed to come back, Select on the other tab would
+  // delete the wrong kind of item. So: check the URL every cycle and right
+  // before the action, and check the selected rows look like this page's.
+  const onRightPage = () => location.pathname.replace(/\/$/, "") === PAGE.path;
+  const wrongPage = () => {
+    console.warn(`This is not the ${PAGE.noun} page any more (${location.pathname}). Stopped so nothing else gets deleted. Reload ${PAGE.path} and run again.`);
+  };
+  if (!onRightPage()) {
+    console.warn(`Run this on https://www.instagram.com${PAGE.path} - this page is ${location.pathname}. Nothing was done.`);
+    window.fetch = __origFetch;
+    return;
+  }
 
   cycles:
   while (!window.__STOP__ && total < MAX_TOTAL) {
+    if (!onRightPage()) { wrongPage(); break; }
     // NOTE: actionError/loadMore429 are NOT reset here. Throttled responses
     // arrive seconds late (often during the between-cycle pause), so the flags
     // are only cleared where they are handled - resetting them here wiped them
@@ -294,13 +358,15 @@
     // out the retries would just burn time. Press OK, then retry the list.
     let icons = getIcons();
     if (icons.length === 0 && await dismissError()) icons = getIcons();
-    for (let att = 1; icons.length === 0 && att <= SELECT_RETRIES && !window.__STOP__; att++) {
+    // after a batch that emptied the list, one re-check is enough
+    const retries = ranOut ? 1 : SELECT_RETRIES;
+    for (let att = 1; icons.length === 0 && att <= retries && !window.__STOP__; att++) {
       const sb = findSelect();
       // right after a dismissed dialog we already waited DIALOG_AFTER - use
       // short re-checks so the waits do not stack up to half a minute
       const wait = justDismissed ? DIALOG_RETRY : SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
-      if (sb) { console.log(`Retry ${att}/${SELECT_RETRIES}: list is back - turning selection mode on again...`); realClick(sb); }
-      else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
+      if (sb) { console.log(`Retry ${att}/${retries}: list is back - turning selection mode on again...`); realClick(sb); }
+      else console.log(`List not ready yet (attempt ${att}/${retries}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
       const slept = sb ? 1500 : wait;
       await sleep(slept);
       if (justDismissed) dialogSpent += slept;
@@ -330,10 +396,18 @@
           // behind: the flag was consumed by the backoff, so nothing counts as
           // an error any more, and the page dropped the list anyway. Give it
           // the same tab switch the 500 path gets before concluding anything.
+          if (ranOut) {
+            // The last batch already took every row that was left, and no
+            // request failed: the list is gone because it is empty. Instagram
+            // drops Select along with the last row, so this is the normal end.
+            console.log(`The last batch took everything that was left - no ${PAGE.noun} remain.`);
+            allDone = true;
+            break;
+          }
           if (total > 0 && (EMPTY_RECOVERIES < 0 || emptyRecoveries < EMPTY_RECOVERIES)) {
             emptyRecoveries++;
             console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
-            if (await tryRecover("The list disappeared without a failed request")) continue;
+            if (await tryRecover(null)) continue;
           }
           console.log(`Select gone. Either all ${PAGE.noun} are removed, or Instagram rate-limited you (the page can break silently). If ${PAGE.noun} remain, reload and wait before running again.`);
         }
@@ -346,6 +420,7 @@
         await sleep(5000);
         if (getIcons().length > 0) continue;
         console.log(`No ${PAGE.noun} left.`);
+        allDone = true;
       }
       break;
     }
@@ -373,21 +448,23 @@
     // Never select past MAX_TOTAL.
     const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH, MAX_TOTAL - total);
     const skipped = new Set();
-    const picks = []; // selected rows, for the dry-run report
+    const picks = [];    // selected rows, for the dry-run report
+    const pickKeys = []; // their keys, taken at selection time (nodes get reused)
     let sel = 0, emptyScrolls = 0;
     while (sel < target && !window.__STOP__ && emptyScrolls < 4) {
       let picked = 0;
       for (const icon of getIcons()) {
         if (sel >= target) break;
         if (skipped.has(icon)) continue;
-        const btn = icon.closest('[role="button"]');
+        const btn = rowOf(icon);
         if (!btn) continue;
         if (Math.random() < SKIP_CHANCE) { skipped.add(icon); continue; } // stays for a later cycle
         realClick(btn);
         picks.push(btn);
+        pickKeys.push(rowKey(btn));
         sel++;
         picked++;
-        await sleep(rnd(450, 1100));
+        await sleep(rnd(CLICK_MIN, CLICK_MAX));
       }
       if (sel < target) {
         window.scrollBy(0, 1600);            // load more rows
@@ -395,25 +472,34 @@
         emptyScrolls = picked === 0 ? emptyScrolls + 1 : 0;
       }
     }
-    if (sel === 0) { console.log("Nothing selectable. Done."); break; }
+    if (sel === 0) { console.log("Nothing selectable."); allDone = true; break; }
+    ranOut = sel < target && emptyScrolls >= 4; // scrolled to the end and still came up short
 
     if (DRY_RUN) {
       // Report what this batch WOULD remove, then undo the selection. The
       // list does not shrink in a dry run, so one batch is all we look at.
       const describe = (el) => {
+        const label = el.getAttribute("aria-label") || "";
         const text = (el.innerText || "").replace(/\s+/g, " ").trim();
         const alt = el.querySelector("img[alt]")?.alt || "";
-        return (text || alt || "(no text - media only)").slice(0, 120);
+        return (label || text || alt || "(no text - media only)").slice(0, 120);
       };
       console.log(`%cDRY RUN: this batch would remove ${sel} item(s):`, "color:yellow;font-weight:bold");
       picks.forEach((el, i) => console.log(`  ${i + 1}. ${describe(el)}`));
-      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); }
+      await clickRowsByKey(pickKeys);
       console.log("%cDRY RUN: selection cleared, nothing was deleted. Set DRY_RUN = false to run for real.", "color:yellow;font-weight:bold");
       break;
     }
 
     // Action (Unlike / Delete) + confirm.
     await sleep(1200);
+    if (!onRightPage()) { wrongPage(); break; }
+    const foreign = PAGE.isRow ? picks.filter(el => !PAGE.isRow(el.getAttribute("aria-label") || "")) : [];
+    if (foreign.length) {
+      console.warn(`${foreign.length} selected row(s) do not look like ${PAGE.noun} (e.g. "${(foreign[0].getAttribute("aria-label") || "").slice(0, 80)}"). Stopped before deleting anything.`);
+      await clickRowsByKey(pickKeys);
+      break;
+    }
     const actionBtn = PAGE.findAction();
     if (!actionBtn) { console.warn(`${PAGE.actionLabel} button not found. Stopped.`); break; }
     realClick(actionBtn);
@@ -451,15 +537,17 @@
     }
 
     // Did the items actually go? Instagram sometimes accepts the action (no
-    // error, sometimes even a toast) and removes nothing. Selected rows that
-    // are still on the page after a few seconds were not removed.
+    // error, sometimes even a toast) and removes nothing. Selected posts that
+    // are still on the page after a few seconds were not removed. Matched by
+    // key, not node: React reuses row nodes for the posts that move up.
     await sleep(2500);
-    const left = picks.filter(el => document.contains(el)).length;
+    const onPage = new Set(allRows().map(rowKey));
+    const left = pickKeys.filter(k => onPage.has(k)).length;
     const gone = sel - left;
     if (gone === 0) {
       noEffect++;
       console.warn(`Cycle ${cycle + 1}: Instagram accepted the ${PAGE.action} but all ${sel} selected ${PAGE.noun} are still there (${noEffect}/2).`);
-      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); } // deselect
+      await clickRowsByKey(pickKeys); // deselect
       if (noEffect >= 2) {
         console.warn("Nothing was removed twice in a row - Instagram is silently ignoring the action (usually throttling). Stopped. Wait 30-60+ min.");
         break;
@@ -489,6 +577,7 @@
       continue;
     }
     errorStreak = 0;
+    if (total >= MAX_TOTAL) break; // limit reached - no point pausing first
 
     // vary the pause; now and then take a longer break like a human would
     const base = Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE);
@@ -499,5 +588,11 @@
   }
 
   window.fetch = __origFetch;
-  console.log(`%cStopped. ${PAGE.done[0].toUpperCase() + PAGE.done.slice(1)} ${total} ${PAGE.noun} in ${cycle} cycles.`, "color:lime;font-weight:bold");
+  // One unmistakable last line: the script is over either way.
+  const noun = total === 1 ? PAGE.noun.replace(/s$/, "").replace(/ie$/, "y") : PAGE.noun; // "1 like", "1 story reply"
+  const summary = `${PAGE.done} ${total} ${noun} in ${cycle} cycle${cycle === 1 ? "" : "s"}`;
+  if (DRY_RUN) console.log(`%c===== DRY RUN FINISHED - nothing was deleted. The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else if (allDone) console.log(`%c===== DONE - all ${PAGE.noun} removed (${summary}). The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else if (total >= MAX_TOTAL) console.log(`%c===== DONE - session limit reached (${summary}). Run it again for the rest. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else console.log(`%c===== STOPPED - ${summary}. Some may remain; see the message above for why. The script is no longer running. =====`, "color:orange;font-weight:bold;font-size:14px");
 })();

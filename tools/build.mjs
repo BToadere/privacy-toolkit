@@ -15,6 +15,7 @@ const TARGETS = {
   "likes.bulk.js": "likes/4-bulk-unlike.js",
   "comments.bulk.js": "comments/3-bulk-delete-comments.js",
   "story_replies.bulk.js": "story_replies/3-bulk-delete-story-replies.js",
+  "reposts.bulk.js": "reposts/3-bulk-remove-reposts.js",
 };
 const NOTICE = "/* GENERATED from src/ by tools/build.mjs - edit src/, then run `npm run build`. */\n";
 

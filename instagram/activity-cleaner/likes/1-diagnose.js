@@ -13,7 +13,7 @@
   const ownText = (el) => [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent.trim()).join("");
   const selectBtn = [...document.querySelectorAll('span,div')]
     .find(el => ownText(el) === "Select");
-  const icons = document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
+  const icons = document.querySelectorAll('[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
 
   console.log("%c=== IG diagnose (read only) ===", "font-weight:bold;font-size:14px");
   console.log("Select button found:", selectBtn ? "yes" : "no");

@@ -130,7 +130,7 @@ changes nothing.
 
 ### For contributors
 
-The likes, comments, and story replies bulk scripts are generated from a shared
+The likes, comments, story replies and reposts bulk scripts are generated from a shared
 engine in [`src/`](src/). Edit `src/`, then run `npm run build` from the repo
 root. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
@@ -141,14 +141,16 @@ randomized each cycle and the scripts occasionally skip an item or take a
 longer pause, so the pattern looks less automated:
 
 ```js
-const BATCH_MIN   = 5;      // fewest selected per cycle (randomized)
-const BATCH_MAX   = 10;     // most selected per cycle (randomized)
+const BATCH_MIN   = 20;     // fewest selected per cycle (randomized)
+const BATCH_MAX   = 30;     // most selected per cycle (randomized)
 const MAX_BATCH   = 100;    // hard cap per cycle (see below)
 const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
-const MAX_TOTAL   = 200;    // stop after this many this session
-const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
-const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
-const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
+const CLICK_MIN   = 250;    // pause between selection clicks (ms) - selecting sends no request
+const CLICK_MAX   = 600;
+const MAX_TOTAL   = 100000; // stop after this many this session (effectively all)
+const MIN_PAUSE   = 15000;  // min pause between cycles (ms)
+const MAX_PAUSE   = 22000;  // max pause between cycles (ms)
+const LONG_BREAK  = 0.1;    // chance of a longer human-like pause between cycles
 const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
 const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
 const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
@@ -157,6 +159,16 @@ const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see
 const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the page (see Limits)
 const EMPTY_RECOVERIES = 3; // restore attempts when the list vanishes with no failed request
 ```
+
+These are production values: one run removes everything at roughly 2,500
+items an hour (likes validated on a real account, 2026-10-25). Each cycle is
+one request no matter how many items it holds, so bigger batches go faster
+without hitting Instagram more often. The reposts scripts use the same
+values; the viewer script (`4-unrepost-via-viewer.js`) goes one by one with
+`MAX = 100000`.
+Leave `MAX_RETRIES` and `RECOVER_500` at 1 - setting them to -1 keeps
+sending actions after Instagram has told you to stop, which is how an
+account gets an action block (typically 24-48h, longer if it repeats).
 
 After every delete the script checks that the selected items actually left
 the page, and counts only those. If Instagram accepts a delete but removes
@@ -197,8 +209,8 @@ page, lower `BATCH_MAX`.
 Instagram limits how many actions you can do in a day. There is no official
 number and it depends on the account.
 
-- Start small. `MAX_TOTAL = 200` per session is a cautious default.
-- If you have thousands of likes, spread it over several days.
+- Start with a dry run, then one small real batch (`MAX_TOTAL = 6`) before a full run.
+- On a main account with thousands of items, consider a few sessions spread over a day or two.
 - If you see "action blocked" or "try again later", stop and wait 24-48h.
   The bulk script stops on its own if it detects that message.
 

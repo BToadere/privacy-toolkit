@@ -27,7 +27,7 @@
   console.log("Clicked Select, waiting for icons to load...");
   await sleep(1500);
 
-  const icons = document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
+  const icons = document.querySelectorAll('[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
   console.log("Selectable like icons now visible:", icons.length);
   console.log("Scroll down to load more likes. When this works, run 3-test-flow-likes.js.");
 })();
