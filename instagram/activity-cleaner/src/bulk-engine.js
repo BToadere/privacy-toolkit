@@ -194,14 +194,20 @@
   // Counts only the tab switches that did NOT bring the list back (see the 429
   // case below); a genuinely empty list must still end the run.
   let emptyRecoveries = 0;
+  // err: an HTTP status (counts against RECOVER_500), or null for the
+  // empty-list case, whose budget (EMPTY_RECOVERIES) the caller tracks.
   const tryRecover = async (err) => {
     actionError = null;
     loadMore429 = false;
-    recoverTries++;
-    if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
+    if (err !== null) {
+      recoverTries++;
+      if (RECOVER_500 >= 0 && recoverTries > RECOVER_500) return false;
+    }
     const wait = rnd(RECOVER_MIN, RECOVER_MAX);
     const what = typeof err === "number" ? `HTTP ${err}` : err; // callers pass a status or a reason
-    console.warn(`${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
+    console.warn(err === null
+      ? `Waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload.`
+      : `${what} broke the page - waiting ~${Math.round(wait / 1000)}s, then switching tabs to re-render the list without a reload (attempt ${recoverTries}/${RECOVER_LIMIT}).`);
     await sleep(wait);
     await dismissError(); // the modal would eat the tab clicks
     const away = findTab(PAGE.awayTab);
@@ -297,7 +303,7 @@
           if (total > 0 && (EMPTY_RECOVERIES < 0 || emptyRecoveries < EMPTY_RECOVERIES)) {
             emptyRecoveries++;
             console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
-            if (await tryRecover("The list disappeared without a failed request")) continue;
+            if (await tryRecover(null)) continue;
           }
           console.log(`Select gone. Either all ${PAGE.noun} are removed, or Instagram rate-limited you (the page can break silently). If ${PAGE.noun} remain, reload and wait before running again.`);
         }
@@ -458,6 +464,7 @@
       continue;
     }
     errorStreak = 0;
+    if (total >= MAX_TOTAL) break; // limit reached - no point pausing first
 
     // vary the pause; now and then take a longer break like a human would
     const base = Math.random() < LONG_BREAK ? rnd(MAX_PAUSE, MAX_PAUSE + 40000) : rnd(MIN_PAUSE, MAX_PAUSE);
