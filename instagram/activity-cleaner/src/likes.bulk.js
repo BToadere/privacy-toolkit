@@ -63,6 +63,9 @@
     confirmWait: 1000,         // ms to wait for the confirm dialog
     awayTab: "Comments",       // recovery: switch to this tab ...
     homeTab: "Likes",          // ... and back to this one
+    path: "/your_activity/interactions/likes", // the script refuses to act anywhere else
+    // a liked post row: "Video, 3 of 18, by @user, shared ..." (2026-10-25)
+    isRow: (label) => /, \d+ of \d+, by @/.test(label),
     findAction: () => [...document.querySelectorAll("span")]
       .find(el => el.innerText?.trim() === "Unlike")?.closest("button, div"),
   };

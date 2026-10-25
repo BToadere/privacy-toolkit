@@ -62,6 +62,8 @@
     confirmWait: 1500,
     awayTab: "Likes",
     homeTab: "Story replies",
+    path: "/your_activity/interactions/story_replies", // the script refuses to act anywhere else
+    isRow: null,               // row label not recorded yet - only the URL is checked
     // New UI (2026-10-25): a role=button labelled "Delete"; the clickable one
     // is the inner pointer-events: auto copy. Old UI: the bloks TextSpan's
     // pointer-events container.

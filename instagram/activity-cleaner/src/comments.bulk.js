@@ -63,6 +63,9 @@
     confirmWait: 1500,
     awayTab: "Likes",
     homeTab: "Comments",
+    path: "/your_activity/interactions/comments", // the script refuses to act anywhere else
+    // a comment row: "user commented 3h, text" (2026-10-25)
+    isRow: (label) => / commented /.test(label),
     // New UI (2026-10-25): a role=button labelled "Delete"; the clickable one
     // is the inner pointer-events: auto copy. Old UI: the bloks TextSpan's
     // pointer-events container.

@@ -240,8 +240,23 @@
   let allDone = false;  // set when we are sure nothing is left - picks the final banner
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
+  // Never act on the wrong list. The recovery switches tabs (likes <->
+  // comments); if it ever failed to come back, Select on the other tab would
+  // delete the wrong kind of item. So: check the URL every cycle and right
+  // before the action, and check the selected rows look like this page's.
+  const onRightPage = () => location.pathname.replace(/\/$/, "") === PAGE.path;
+  const wrongPage = () => {
+    console.warn(`This is not the ${PAGE.noun} page any more (${location.pathname}). Stopped so nothing else gets deleted. Reload ${PAGE.path} and run again.`);
+  };
+  if (!onRightPage()) {
+    console.warn(`Run this on https://www.instagram.com${PAGE.path} - this page is ${location.pathname}. Nothing was done.`);
+    window.fetch = __origFetch;
+    return;
+  }
+
   cycles:
   while (!window.__STOP__ && total < MAX_TOTAL) {
+    if (!onRightPage()) { wrongPage(); break; }
     // NOTE: actionError/loadMore429 are NOT reset here. Throttled responses
     // arrive seconds late (often during the between-cycle pause), so the flags
     // are only cleared where they are handled - resetting them here wiped them
@@ -402,6 +417,13 @@
 
     // Action (Unlike / Delete) + confirm.
     await sleep(1200);
+    if (!onRightPage()) { wrongPage(); break; }
+    const foreign = PAGE.isRow ? picks.filter(el => !PAGE.isRow(el.getAttribute("aria-label") || "")) : [];
+    if (foreign.length) {
+      console.warn(`${foreign.length} selected row(s) do not look like ${PAGE.noun} (e.g. "${(foreign[0].getAttribute("aria-label") || "").slice(0, 80)}"). Stopped before deleting anything.`);
+      await clickRowsByKey(pickKeys);
+      break;
+    }
     const actionBtn = PAGE.findAction();
     if (!actionBtn) { console.warn(`${PAGE.actionLabel} button not found. Stopped.`); break; }
     realClick(actionBtn);
