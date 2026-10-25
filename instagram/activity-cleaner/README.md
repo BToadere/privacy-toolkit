@@ -54,7 +54,7 @@ above) before running a group, and run the files in number order.
 |------|--------------|----------|
 | `1-diagnose.js` | Checks the selectors match the current UI | no |
 | `2-check-select-mode.js` | Turns on selection mode, counts likes | no |
-| `3-mini-test-3-likes.js` | Removes 3 likes so you see the flow | yes, 3 |
+| `3-test-flow-likes.js` | Selects 3, checks every step up to Unlike, deselects | no |
 | `4-bulk-unlike.js` | Loops and removes likes in batches | yes |
 
 **Comments** — [`comments/`](comments/) — page `.../interactions/comments`
@@ -62,7 +62,7 @@ above) before running a group, and run the files in number order.
 | File | What it does | Deletes? |
 |------|--------------|----------|
 | `1-diagnose-comments.js` | Turns on selection mode, checks selectors | no |
-| `2-mini-test-3-comments.js` | Deletes 3 comments so you see the flow | yes, 3 |
+| `2-test-flow-comments.js` | Selects 3, checks every step up to Delete, deselects | no |
 | `3-bulk-delete-comments.js` | Loops and deletes comments in batches | yes |
 
 **Reposts** — [`reposts/`](reposts/) — page `.../interactions/reposts`
@@ -70,8 +70,8 @@ above) before running a group, and run the files in number order.
 | File | What it does | Deletes? |
 |------|--------------|----------|
 | `1-diagnose-reposts.js` | Turns on selection mode, checks selectors | no |
-| `2-mini-test-3-reposts.js` | Removes up to 3 reposts so you see the flow | yes, 3 |
-| `3-bulk-remove-reposts.js` | Loops and removes reposts in batches | yes |
+| `2-test-flow-reposts.js` | Selects 3, checks every step up to Delete, deselects | no |
+| `3-bulk-remove-reposts.js` | Loops and removes reposts in batches (dry run first) | yes |
 | `4-unrepost-via-viewer.js` | **Recommended.** Un-reposts through the profile viewer | yes |
 
 For reposts, use `4-unrepost-via-viewer.js` — the bulk list (`1`-`3`) deletes
@@ -82,15 +82,17 @@ unreliably. See [`reposts/NOTES.md`](reposts/NOTES.md).
 | File | What it does | Deletes? |
 |------|--------------|----------|
 | `1-diagnose-story-replies.js` | Turns on selection mode, checks selectors | no |
-| `2-mini-test-3-story-replies.js` | Deletes 3 story replies so you see the flow | yes, 3 |
+| `2-test-flow-story-replies.js` | Selects 3, checks every step up to Delete, deselects | no |
 | `3-bulk-delete-story-replies.js` | Loops and deletes story replies in batches | yes |
 
 Comments, reposts, and story replies all use the same delete flow (Select →
 pick → Delete → confirm), so those three groups are near-identical; only likes
 differ (they use "Unlike").
 
-Doing the diagnose and mini-test first is how you find out whether it still
-works before you delete anything at scale. Instagram changes its markup, so
+Doing the diagnose and test-flow first is how you find out whether it still
+works before you delete anything. The test-flow scripts never delete: they
+run every step up to the delete button, find it without clicking it, and
+clear the selection. If any line says FAIL, do not run the bulk script. Instagram changes its markup, so
 the selectors can break; the diagnose step tells you early.
 
 Each page uses slightly different controls, so the three groups are not
@@ -109,9 +111,12 @@ viewer and works reliably. Details in [`reposts/NOTES.md`](reposts/NOTES.md).
 
 ### Dry run (on by default)
 
-Every bulk script (likes, comments, story replies, and the reposts viewer
-script) starts with `DRY_RUN = true`. In a dry run the script selects one
-batch, prints what it would remove, clears the selection, and stops.
+Every bulk script (likes, comments, story replies, and both reposts scripts)
+starts with `DRY_RUN = true`. In a dry run the likes, comments and story
+replies scripts first scroll through the list and count what is there (up to
+`SCAN_LIMIT`, 1000 by default), then print how many a real run would remove
+(capped by `MAX_TOTAL`). Then they select one batch, print what it would
+remove, clear the selection, and stop.
 **Nothing is deleted.** Check the output, then set `DRY_RUN = false` at the top
 of the script and run it again to delete for real.
 
@@ -147,10 +152,16 @@ const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycle
 const SELECT_RETRIES = 3;   // re-checks before concluding the list is empty
 const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits between re-checks (ms)
 const SORT_ORDER  = "auto"; // "auto" keeps what you set, "newest" / "oldest" force one
+const SCAN_LIMIT  = 1000;   // dry run: count at most this many (each scroll is a request)
 const MAX_RETRIES = 1;      // backoff-and-retries on a 429 before stopping (see Limits)
 const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the page (see Limits)
 const EMPTY_RECOVERIES = 3; // restore attempts when the list vanishes with no failed request
 ```
+
+After every delete the script checks that the selected items actually left
+the page, and counts only those. If Instagram accepts a delete but removes
+nothing twice in a row (it does this when it throttles silently), the script
+stops.
 
 Skipped items are not lost — they stay unselected and get picked up in a later
 cycle.

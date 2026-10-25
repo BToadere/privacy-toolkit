@@ -38,5 +38,5 @@
 
   console.log("Selectable icons after Select:", icons.length);
   console.log("'Delete' control present:", deleteSpan ? "yes" : "no (usually appears once something is selected)");
-  console.log("If this looks right, run 2-mini-test-3-story-replies.js.");
+  console.log("If this looks right, run 2-test-flow-story-replies.js.");
 })();

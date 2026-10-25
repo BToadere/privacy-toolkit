@@ -21,26 +21,27 @@
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
                               // Set to false only after you checked the dry-run output.
+  const SCAN_LIMIT  = 1000;   // dry run: count at most this many before reporting (each scroll is a request)
   const BATCH_MIN   = 5;      // fewest likes selected per cycle (randomized)
   const BATCH_MAX   = 10;     // most likes selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
-  const MAX_TOTAL   = 20000;    // stop after this many likes this session (rate-limit guard)
-  const MIN_PAUSE   = 10000;  // min pause between cycles (ms)
-  const MAX_PAUSE   = 15000;  // max pause between cycles (ms)
+  const MAX_TOTAL   = 200;    // stop after this many likes this session (rate-limit guard)
+  const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
+  const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
   const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
   const SORT_ORDER = "auto";  // "auto" = keep whatever the page is set to when you start;
                               // "newest" / "oldest" = force that order and put it back
                               // whenever the page resets it (every re-render does)
-  const MAX_RETRIES = -1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
-  const BACKOFF_MIN = 10000;  // wait at least this long after a 429 (ms)
-  const BACKOFF_MAX = 20000; // wait at most this long after a 429 (ms)
-  const RECOVER_500  = -1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
-  const RECOVER_MIN  = 10000;  // wait at least this long before the restore attempt (ms)
-  const RECOVER_MAX  = 20000; // wait at most this long before the restore attempt (ms)
-  const EMPTY_RECOVERIES = -1;  // if the list vanishes with NO failed request (what a 429 leaves
+  const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
+  const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
+  const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
+  const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
+  const RECOVER_MIN  = 60000;  // wait at least this long before the restore attempt (ms)
+  const RECOVER_MAX  = 100000; // wait at most this long before the restore attempt (ms)
+  const EMPTY_RECOVERIES = 3;  // if the list vanishes with NO failed request (what a 429 leaves
                                // behind), try the same tab switch this many times; -1 = keep trying.
                                // Reset as soon as the list is back, so only failures count.
   // A 500 on the real unlike action breaks the page - the script tries the
@@ -111,6 +112,33 @@
       .find(el => el.innerText?.trim() === "Select")
     || null;
   const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
+  // A row's identity for counting. The list is virtualized (rows are dropped
+  // and re-created while scrolling), so DOM nodes cannot be used as keys -
+  // the row's text plus its thumbnail is stable enough to tell them apart.
+  const rowKey = (row) => (row.innerText || "").replace(/\s+/g, " ").trim()
+    + "|" + (row.querySelector("img")?.src || "");
+  // Dry run only: scroll through the list and count the rows, up to SCAN_LIMIT
+  // (every scroll is a 'load more' request, so the scan is capped too). Stops
+  // early on a 429 - counting is not worth getting throttled for.
+  const scanList = async () => {
+    const seen = new Set();
+    let still = 0;
+    window.scrollTo(0, 0);
+    await sleep(1500);
+    while (seen.size < SCAN_LIMIT && still < 4 && !window.__STOP__ && !loadMore429) {
+      const before = seen.size;
+      for (const icon of getIcons()) {
+        const row = icon.closest('[role="button"]');
+        if (row) seen.add(rowKey(row));
+      }
+      still = seen.size === before ? still + 1 : 0;
+      window.scrollBy(0, 1600);
+      await sleep(rnd(1200, 2000));
+    }
+    window.scrollTo(0, 0);
+    await sleep(1500);
+    return { count: Math.min(seen.size, SCAN_LIMIT), complete: still >= 4, throttled: loadMore429 };
+  };
   const blocked = () => [...document.querySelectorAll("*")]
     .some(el => /action blocked|try again later|we restrict/i.test(el.innerText || ""));
 
@@ -236,7 +264,7 @@
     console.warn(`SORT_ORDER '${SORT_ORDER}' is not valid - use "auto", "newest" or "oldest". Leaving the sort order alone.`);
   }
 
-  let total = 0, cycle = 0, errorStreak = 0;
+  let total = 0, cycle = 0, errorStreak = 0, noEffect = 0;
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   cycles:
@@ -328,9 +356,22 @@
     recoverTries = 0;
     emptyRecoveries = 0;
 
+    if (DRY_RUN) {
+      // Tell the user how much a real run would touch before anything else.
+      console.log(`%cDRY RUN: counting ${PAGE.noun} (up to ${SCAN_LIMIT})...`, "color:yellow;font-weight:bold");
+      const scan = await scanList();
+      const found = scan.complete ? `${scan.count}` : `at least ${scan.count}`;
+      console.log(`%cDRY RUN: ${found} ${PAGE.noun} found${scan.throttled ? " (scan stopped early: Instagram returned 429 - slow down before a real run)" : scan.complete ? "" : ` (scan capped at SCAN_LIMIT = ${SCAN_LIMIT})`}.`, "color:yellow;font-weight:bold");
+      console.log(`%cDRY RUN: a real run would remove up to ${Math.min(scan.count, MAX_TOTAL)} this session (MAX_TOTAL = ${MAX_TOTAL}), in batches of ${BATCH_MIN}-${BATCH_MAX}, ~${Math.round((MIN_PAUSE + MAX_PAUSE) / 2000)}s apart.`, "color:yellow;font-weight:bold");
+      loadMore429 = false;
+      icons = getIcons();
+      if (icons.length === 0) { console.log("DRY RUN: the list did not come back after the scan - reload and try again."); break; }
+    }
+
     // Select a randomized batch. Instagram keeps only ~25 rows in the DOM at a
     // time, so scroll to load more until we reach the target (or run out).
-    const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH);
+    // Never select past MAX_TOTAL.
+    const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH, MAX_TOTAL - total);
     const skipped = new Set();
     const picks = []; // selected rows, for the dry-run report
     let sel = 0, emptyScrolls = 0;
@@ -409,9 +450,29 @@
       continue;
     }
 
-    total += sel;
+    // Did the items actually go? Instagram sometimes accepts the action (no
+    // error, sometimes even a toast) and removes nothing. Selected rows that
+    // are still on the page after a few seconds were not removed.
+    await sleep(2500);
+    const left = picks.filter(el => document.contains(el)).length;
+    const gone = sel - left;
+    if (gone === 0) {
+      noEffect++;
+      console.warn(`Cycle ${cycle + 1}: Instagram accepted the ${PAGE.action} but all ${sel} selected ${PAGE.noun} are still there (${noEffect}/2).`);
+      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); } // deselect
+      if (noEffect >= 2) {
+        console.warn("Nothing was removed twice in a row - Instagram is silently ignoring the action (usually throttling). Stopped. Wait 30-60+ min.");
+        break;
+      }
+      await sleep(rnd(BACKOFF_MIN, BACKOFF_MAX));
+      continue;
+    }
+    noEffect = 0;
+    if (left) console.warn(`${left} of ${sel} selected ${PAGE.noun} are still on the page - counting only the ${gone} that went.`);
+
+    total += gone;
     cycle++;
-    console.log(`Cycle ${cycle}: ${PAGE.done} ${sel} | total ${total}/${MAX_TOTAL}`);
+    console.log(`Cycle ${cycle}: ${PAGE.done} ${gone} | total ${total}/${MAX_TOTAL}`);
 
     if (loadMore429) {
       // pagination got throttled; the actions went through, but Instagram is

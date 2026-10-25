@@ -20,26 +20,27 @@
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
                               // Set to false only after you checked the dry-run output.
+  const SCAN_LIMIT  = 1000;   // dry run: count at most this many before reporting (each scroll is a request)
   const BATCH_MIN   = 5;      // fewest likes selected per cycle (randomized)
   const BATCH_MAX   = 10;     // most likes selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
   const SKIP_CHANCE = 0.12;   // chance to skip an item this pass (picked up later)
-  const MAX_TOTAL   = 20000;    // stop after this many likes this session (rate-limit guard)
-  const MIN_PAUSE   = 10000;  // min pause between cycles (ms)
-  const MAX_PAUSE   = 15000;  // max pause between cycles (ms)
+  const MAX_TOTAL   = 200;    // stop after this many likes this session (rate-limit guard)
+  const MIN_PAUSE   = 18000;  // min pause between cycles (ms)
+  const MAX_PAUSE   = 30000;  // max pause between cycles (ms)
   const LONG_BREAK  = 0.2;    // chance of a longer human-like pause between cycles
   const SELECT_RETRIES = 3;   // if the list looks empty, re-check this many times (page reloads slowly after big deletes)
   const SELECT_PAUSES = [5000, 8000, 12000]; // escalating waits (ms) between those re-checks; extra retries reuse the last value
   const SORT_ORDER = "auto";  // "auto" = keep whatever the page is set to when you start;
                               // "newest" / "oldest" = force that order and put it back
                               // whenever the page resets it (every re-render does)
-  const MAX_RETRIES = -1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
-  const BACKOFF_MIN = 10000;  // wait at least this long after a 429 (ms)
-  const BACKOFF_MAX = 20000; // wait at most this long after a 429 (ms)
-  const RECOVER_500  = -1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
-  const RECOVER_MIN  = 10000;  // wait at least this long before the restore attempt (ms)
-  const RECOVER_MAX  = 20000; // wait at most this long before the restore attempt (ms)
-  const EMPTY_RECOVERIES = -1;  // if the list vanishes with NO failed request (what a 429 leaves
+  const MAX_RETRIES = 1;      // backoff-and-retry this many times on a 429 before stopping; 0 = stop on the first 429, -1 = retry forever
+  const BACKOFF_MIN = 60000;  // wait at least this long after a 429 (ms)
+  const BACKOFF_MAX = 120000; // wait at most this long after a 429 (ms)
+  const RECOVER_500  = 1;      // after a 500 breaks the page, try to restore it in place this many times (0 = stop immediately, -1 = keep trying forever)
+  const RECOVER_MIN  = 60000;  // wait at least this long before the restore attempt (ms)
+  const RECOVER_MAX  = 100000; // wait at most this long before the restore attempt (ms)
+  const EMPTY_RECOVERIES = 3;  // if the list vanishes with NO failed request (what a 429 leaves
                                // behind), try the same tab switch this many times; -1 = keep trying.
                                // Reset as soon as the list is back, so only failures count.
   // A 500 on the real unlike action breaks the page - the script tries the

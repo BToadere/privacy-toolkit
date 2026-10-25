@@ -91,7 +91,7 @@ Reality: reposts use the same Bloks flow as comments —
 `TextSpan "Delete"` → click the `pointer-events: auto` container → confirm via
 a real `<button>` whose text is "Delete".
 
-TODO: simplify `3-bulk-remove-reposts.js` and `2-mini-test-3-reposts.js` to the
+TODO: simplify `3-bulk-remove-reposts.js` and `2-test-flow-reposts.js` to the
 comments-style approach and drop the pointer-event / leaf-click code. Keep
 section 1 above, since the partial-deletion bug is a separate, real Instagram
 issue.
