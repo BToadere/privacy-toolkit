@@ -62,8 +62,12 @@
     confirmWait: 1500,
     awayTab: "Likes",
     homeTab: "Story replies",
-    findAction: () => [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
-      .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]'),
+    // New UI (2026-10-25): a role=button labelled "Delete"; the clickable one
+    // is the inner pointer-events: auto copy. Old UI: the bloks TextSpan's
+    // pointer-events container.
+    findAction: () => document.querySelector('div[role="button"][aria-label="Delete"][style*="pointer-events: auto"]')
+      || [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
+        .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]'),
   };
 
   //@engine

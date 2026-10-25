@@ -67,8 +67,9 @@
   picks.forEach((row, i) => console.log(`        ${i + 1}. ${(row.getAttribute("aria-label") || (row.innerText || "").replace(/\s+/g, " ").trim()).slice(0, 100) || "(media only)"}`));
 
   // 3. the action button the bulk script presses - located, NOT clicked
-  const action = [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
-    .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]');
+  const action = document.querySelector('div[role="button"][aria-label="Delete"][style*="pointer-events: auto"]')
+    || [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]
+      .find(s => s.innerText?.trim() === "Delete")?.closest('div[style*="pointer-events: auto"]');
   if (action) ok("'Delete' button found (not clicked)");
   else pass = fail("'Delete' button not found - the bulk script would stop here.");
 

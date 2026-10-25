@@ -137,7 +137,8 @@
   // label fall back to their text plus thumbnail.
   const rowKey = (row) => {
     const label = row.getAttribute("aria-label");
-    if (label) return label.replace(/, \d+ of \d+/, "");
+    // comments: "user commented 3h, text" - the age ticks over mid-run
+    if (label) return label.replace(/, \d+ of \d+/, "").replace(/ \d+[smhdwy],/, ",");
     return (row.innerText || "").replace(/\s+/g, " ").trim() + "|" + (row.querySelector("img")?.src || "");
   };
   // Click the rows with these keys that are still on the page (used to undo a
@@ -305,6 +306,8 @@
   }
 
   let total = 0, cycle = 0, errorStreak = 0, noEffect = 0;
+  let ranOut = false;   // the last batch emptied the list (it found fewer rows than it wanted)
+  let allDone = false;  // set when we are sure nothing is left - picks the final banner
   console.log("%cStart. Stop with:  window.__STOP__ = true", "color:cyan;font-weight:bold");
 
   cycles:
@@ -334,13 +337,15 @@
     // out the retries would just burn time. Press OK, then retry the list.
     let icons = getIcons();
     if (icons.length === 0 && await dismissError()) icons = getIcons();
-    for (let att = 1; icons.length === 0 && att <= SELECT_RETRIES && !window.__STOP__; att++) {
+    // after a batch that emptied the list, one re-check is enough
+    const retries = ranOut ? 1 : SELECT_RETRIES;
+    for (let att = 1; icons.length === 0 && att <= retries && !window.__STOP__; att++) {
       const sb = findSelect();
       // right after a dismissed dialog we already waited DIALOG_AFTER - use
       // short re-checks so the waits do not stack up to half a minute
       const wait = justDismissed ? DIALOG_RETRY : SELECT_PAUSES[Math.min(att, SELECT_PAUSES.length) - 1];
-      if (sb) { console.log(`Retry ${att}/${SELECT_RETRIES}: list is back - turning selection mode on again...`); realClick(sb); }
-      else console.log(`List not ready yet (attempt ${att}/${SELECT_RETRIES}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
+      if (sb) { console.log(`Retry ${att}/${retries}: list is back - turning selection mode on again...`); realClick(sb); }
+      else console.log(`List not ready yet (attempt ${att}/${retries}) - waiting ${Math.round(wait / 1000)}s for the page to load...`);
       const slept = sb ? 1500 : wait;
       await sleep(slept);
       if (justDismissed) dialogSpent += slept;
@@ -370,6 +375,14 @@
           // behind: the flag was consumed by the backoff, so nothing counts as
           // an error any more, and the page dropped the list anyway. Give it
           // the same tab switch the 500 path gets before concluding anything.
+          if (ranOut) {
+            // The last batch already took every row that was left, and no
+            // request failed: the list is gone because it is empty. Instagram
+            // drops Select along with the last row, so this is the normal end.
+            console.log(`The last batch took everything that was left - no ${PAGE.noun} remain.`);
+            allDone = true;
+            break;
+          }
           if (total > 0 && (EMPTY_RECOVERIES < 0 || emptyRecoveries < EMPTY_RECOVERIES)) {
             emptyRecoveries++;
             console.warn(`The list is gone but no request failed - trying the tab switch (${emptyRecoveries}/${EMPTY_LIMIT}) before giving up.`);
@@ -386,6 +399,7 @@
         await sleep(5000);
         if (getIcons().length > 0) continue;
         console.log(`No ${PAGE.noun} left.`);
+        allDone = true;
       }
       break;
     }
@@ -437,7 +451,8 @@
         emptyScrolls = picked === 0 ? emptyScrolls + 1 : 0;
       }
     }
-    if (sel === 0) { console.log("Nothing selectable. Done."); break; }
+    if (sel === 0) { console.log("Nothing selectable."); allDone = true; break; }
+    ranOut = sel < target && emptyScrolls >= 4; // scrolled to the end and still came up short
 
     if (DRY_RUN) {
       // Report what this batch WOULD remove, then undo the selection. The
@@ -545,5 +560,10 @@
   }
 
   window.fetch = __origFetch;
-  console.log(`%cStopped. ${PAGE.done[0].toUpperCase() + PAGE.done.slice(1)} ${total} ${PAGE.noun} in ${cycle} cycles.`, "color:lime;font-weight:bold");
+  // One unmistakable last line: the script is over either way.
+  const summary = `${PAGE.done} ${total} ${PAGE.noun} in ${cycle} cycle${cycle === 1 ? "" : "s"}`;
+  if (DRY_RUN) console.log(`%c===== DRY RUN FINISHED - nothing was deleted. The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else if (allDone) console.log(`%c===== DONE - all ${PAGE.noun} removed (${summary}). The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else if (total >= MAX_TOTAL) console.log(`%c===== DONE - session limit reached (${summary}). Run it again for the rest. =====`, "color:lime;font-weight:bold;font-size:14px");
+  else console.log(`%c===== STOPPED - ${summary}. Some may remain; see the message above for why. The script is no longer running. =====`, "color:orange;font-weight:bold;font-size:14px");
 })();
