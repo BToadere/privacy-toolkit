@@ -160,6 +160,16 @@ const RECOVER_500 = 1;      // in-place restore attempts after a 500 breaks the 
 const EMPTY_RECOVERIES = 3; // restore attempts when the list vanishes with no failed request
 ```
 
+The likes script ships faster settings, validated on a real account
+(2026-10-25): batches of 20-30, 15-22s pauses, fewer long breaks, and
+`MAX_TOTAL = 100000` so it removes everything in one go. Each cycle is one
+request no matter how many items it holds, so bigger batches go faster
+without hitting Instagram more often. The comments and story replies scripts
+keep the cautious values above until they are validated the same way.
+Leave `MAX_RETRIES` and `RECOVER_500` at 1 - setting them to -1 keeps
+sending actions after Instagram has told you to stop, which is how an
+account gets an action block (typically 24-48h, longer if it repeats).
+
 After every delete the script checks that the selected items actually left
 the page, and counts only those. If Instagram accepts a delete but removes
 nothing twice in a row (it does this when it throttles silently), the script
@@ -199,8 +209,8 @@ page, lower `BATCH_MAX`.
 Instagram limits how many actions you can do in a day. There is no official
 number and it depends on the account.
 
-- Start small. `MAX_TOTAL = 200` per session is a cautious default.
-- If you have thousands of likes, spread it over several days.
+- Start with a dry run, then one small real batch (`MAX_TOTAL = 6`) before a full run.
+- On a main account with thousands of items, consider a few sessions spread over a day or two.
 - If you see "action blocked" or "try again later", stop and wait 24-48h.
   The bulk script stops on its own if it detects that message.
 
