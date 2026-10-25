@@ -35,5 +35,5 @@
   const delBtn = document.querySelector('div[role="button"][aria-label="Delete"]');
   console.log("Selectable repost icons after Select:", icons.length);
   console.log("Delete control present:", !!delBtn, "(usually appears once something is selected)");
-  console.log("If this looks right, run 2-mini-test-3-reposts.js.");
+  console.log("If this looks right, run 2-test-flow-reposts.js.");
 })();

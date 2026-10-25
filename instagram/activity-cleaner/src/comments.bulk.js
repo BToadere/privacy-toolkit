@@ -20,6 +20,7 @@
   // ===== settings =====
   const DRY_RUN     = true;   // true = select one batch, list it, deselect, and stop. Nothing is deleted.
                               // Set to false only after you checked the dry-run output.
+  const SCAN_LIMIT  = 1000;   // dry run: count at most this many before reporting (each scroll is a request)
   const BATCH_MIN   = 5;      // fewest comments selected per cycle (randomized)
   const BATCH_MAX   = 10;     // most comments selected per cycle (randomized)
   const MAX_BATCH   = 100;    // hard cap - Instagram deselects past ~100 per action (and can 500)
