@@ -600,7 +600,8 @@
 
   window.fetch = __origFetch;
   // One unmistakable last line: the script is over either way.
-  const summary = `${PAGE.done} ${total} ${PAGE.noun} in ${cycle} cycle${cycle === 1 ? "" : "s"}`;
+  const noun = total === 1 ? PAGE.noun.replace(/s$/, "").replace(/ie$/, "y") : PAGE.noun; // "1 like", "1 story reply"
+  const summary = `${PAGE.done} ${total} ${noun} in ${cycle} cycle${cycle === 1 ? "" : "s"}`;
   if (DRY_RUN) console.log(`%c===== DRY RUN FINISHED - nothing was deleted. The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
   else if (allDone) console.log(`%c===== DONE - all ${PAGE.noun} removed (${summary}). The script is no longer running. =====`, "color:lime;font-weight:bold;font-size:14px");
   else if (total >= MAX_TOTAL) console.log(`%c===== DONE - session limit reached (${summary}). Run it again for the rest. =====`, "color:lime;font-weight:bold;font-size:14px");
