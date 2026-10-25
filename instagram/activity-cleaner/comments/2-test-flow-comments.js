@@ -16,10 +16,17 @@
     ["mousedown", "mouseup", "click"].forEach(t =>
       el.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, buttons: 1 })));
   };
-  const getIcons = () => [...document.querySelectorAll('div[data-bloks-name="ig.components.Icon"]')]
-    .filter(el => (el.getAttribute("style") || "").includes("circle__outline"));
-  const countChecked = () => [...document.querySelectorAll('div[data-bloks-name="ig.components.Icon"]')]
+  // empty circles: new UI ([data-testid] + mask style) or the old bloks one
+  const getIcons = () => [...document.querySelectorAll('[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]')];
+  const countChecked = () => [...document.querySelectorAll('[data-testid="bulk_action_checkbox"] div[style], div[data-bloks-name="ig.components.Icon"]')]
     .filter(el => (el.getAttribute("style") || "").includes("circle-check")).length;
+  // the clickable row: the circle has its own role=button ("Toggle checkbox"),
+  // the row is the next role=button up (new UI, 2026-10-25)
+  const rowOf = (el) => {
+    let row = el.closest('[role="button"]');
+    while (row && row.getAttribute("aria-label") === "Toggle checkbox") row = row.parentElement?.closest('[role="button"]');
+    return row || null;
+  };
   const ok = (msg) => console.log(`%c  OK    ${msg}`, "color:lime");
   const fail = (msg) => { console.warn(`  FAIL  ${msg}`); return false; };
 
@@ -45,7 +52,7 @@
   const picks = [];
   for (const icon of icons) {
     if (picks.length >= 3) break;
-    const row = icon.closest('[role="button"]');
+    const row = rowOf(icon);
     if (!row) continue;
     realClick(row);
     picks.push(row);
@@ -57,7 +64,7 @@
   const registered = Math.max(countChecked() - checkedBefore, outlineBefore - getIcons().length);
   if (registered === picks.length) ok(`selected ${picks.length}, and Instagram shows ${registered} checked`);
   else pass = fail(`clicked ${picks.length} rows but Instagram shows ${registered} checked - the bulk script would delete the wrong amount or nothing.`);
-  picks.forEach((row, i) => console.log(`        ${i + 1}. ${(row.innerText || "").replace(/\s+/g, " ").trim().slice(0, 100) || "(media only)"}`));
+  picks.forEach((row, i) => console.log(`        ${i + 1}. ${(row.getAttribute("aria-label") || (row.innerText || "").replace(/\s+/g, " ").trim()).slice(0, 100) || "(media only)"}`));
 
   // 3. the action button the bulk script presses - located, NOT clicked
   const action = [...document.querySelectorAll('span[data-bloks-name="bk.components.TextSpan"]')]

@@ -110,12 +110,44 @@
     || [...document.querySelectorAll('div[data-bloks-name="bk.components.Flexbox"]')]
       .find(el => el.innerText?.trim() === "Select")
     || null;
-  const getIcons = () => document.querySelectorAll('div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
-  // A row's identity for counting. The list is virtualized (rows are dropped
-  // and re-created while scrolling), so DOM nodes cannot be used as keys -
-  // the row's text plus its thumbnail is stable enough to tell them apart.
-  const rowKey = (row) => (row.innerText || "").replace(/\s+/g, " ").trim()
-    + "|" + (row.querySelector("img")?.src || "");
+  // Empty selection circles. Instagram dropped the bloks attributes here
+  // (recorded 2026-10-25): the circle is now a plain div with the
+  // circle__outline mask inside [data-testid="bulk_action_checkbox"]. The old
+  // bloks selector stays as a fallback for accounts still on the old UI.
+  const getIcons = () => document.querySelectorAll(
+    '[data-testid="bulk_action_checkbox"] div[style*="circle__outline"], div[data-bloks-name="ig.components.Icon"][style*="circle__outline"]');
+  // The clickable row around a circle. The circle sits in its own
+  // role=button ("Toggle checkbox", pointer-events: none); the row is the
+  // next role=button up, labelled with the post ("Video, 3 of 18, by @x, ...").
+  const rowOf = (el) => {
+    let row = el.closest('[role="button"]');
+    while (row && row.getAttribute("aria-label") === "Toggle checkbox") row = row.parentElement?.closest('[role="button"]');
+    return row || null;
+  };
+  // Every row on the page, selected or not.
+  const allRows = () => [...document.querySelectorAll(
+    '[data-testid="bulk_action_checkbox"], div[data-bloks-name="ig.components.Icon"][style*="circle"]')]
+    .map(rowOf).filter(Boolean);
+  // A row's identity. The list is virtualized and React reuses row nodes, so
+  // DOM nodes cannot be used as keys. The row label names the post; its
+  // "N of M" position shifts as items go, so it is dropped. Rows without a
+  // label fall back to their text plus thumbnail.
+  const rowKey = (row) => {
+    const label = row.getAttribute("aria-label");
+    if (label) return label.replace(/, \d+ of \d+/, "");
+    return (row.innerText || "").replace(/\s+/g, " ").trim() + "|" + (row.querySelector("img")?.src || "");
+  };
+  // Click the rows with these keys that are still on the page (used to undo a
+  // selection - never by node, which may now show a different post).
+  const clickRowsByKey = async (keys) => {
+    const want = new Set(keys);
+    for (const row of allRows()) {
+      if (!want.has(rowKey(row))) continue;
+      want.delete(rowKey(row));
+      realClick(row);
+      await sleep(rnd(300, 600));
+    }
+  };
   // Dry run only: scroll through the list and count the rows, up to SCAN_LIMIT
   // (every scroll is a 'load more' request, so the scan is capped too). Stops
   // early on a 429 - counting is not worth getting throttled for.
@@ -127,7 +159,7 @@
     while (seen.size < SCAN_LIMIT && still < 4 && !window.__STOP__ && !loadMore429) {
       const before = seen.size;
       for (const icon of getIcons()) {
-        const row = icon.closest('[role="button"]');
+        const row = rowOf(icon);
         if (row) seen.add(rowKey(row));
       }
       still = seen.size === before ? still + 1 : 0;
@@ -372,18 +404,20 @@
     // Never select past MAX_TOTAL.
     const target = Math.min(rnd(BATCH_MIN, BATCH_MAX + 1), MAX_BATCH, MAX_TOTAL - total);
     const skipped = new Set();
-    const picks = []; // selected rows, for the dry-run report
+    const picks = [];    // selected rows, for the dry-run report
+    const pickKeys = []; // their keys, taken at selection time (nodes get reused)
     let sel = 0, emptyScrolls = 0;
     while (sel < target && !window.__STOP__ && emptyScrolls < 4) {
       let picked = 0;
       for (const icon of getIcons()) {
         if (sel >= target) break;
         if (skipped.has(icon)) continue;
-        const btn = icon.closest('[role="button"]');
+        const btn = rowOf(icon);
         if (!btn) continue;
         if (Math.random() < SKIP_CHANCE) { skipped.add(icon); continue; } // stays for a later cycle
         realClick(btn);
         picks.push(btn);
+        pickKeys.push(rowKey(btn));
         sel++;
         picked++;
         await sleep(rnd(450, 1100));
@@ -400,13 +434,14 @@
       // Report what this batch WOULD remove, then undo the selection. The
       // list does not shrink in a dry run, so one batch is all we look at.
       const describe = (el) => {
+        const label = el.getAttribute("aria-label") || "";
         const text = (el.innerText || "").replace(/\s+/g, " ").trim();
         const alt = el.querySelector("img[alt]")?.alt || "";
-        return (text || alt || "(no text - media only)").slice(0, 120);
+        return (label || text || alt || "(no text - media only)").slice(0, 120);
       };
       console.log(`%cDRY RUN: this batch would remove ${sel} item(s):`, "color:yellow;font-weight:bold");
       picks.forEach((el, i) => console.log(`  ${i + 1}. ${describe(el)}`));
-      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); }
+      await clickRowsByKey(pickKeys);
       console.log("%cDRY RUN: selection cleared, nothing was deleted. Set DRY_RUN = false to run for real.", "color:yellow;font-weight:bold");
       break;
     }
@@ -450,15 +485,17 @@
     }
 
     // Did the items actually go? Instagram sometimes accepts the action (no
-    // error, sometimes even a toast) and removes nothing. Selected rows that
-    // are still on the page after a few seconds were not removed.
+    // error, sometimes even a toast) and removes nothing. Selected posts that
+    // are still on the page after a few seconds were not removed. Matched by
+    // key, not node: React reuses row nodes for the posts that move up.
     await sleep(2500);
-    const left = picks.filter(el => document.contains(el)).length;
+    const onPage = new Set(allRows().map(rowKey));
+    const left = pickKeys.filter(k => onPage.has(k)).length;
     const gone = sel - left;
     if (gone === 0) {
       noEffect++;
       console.warn(`Cycle ${cycle + 1}: Instagram accepted the ${PAGE.action} but all ${sel} selected ${PAGE.noun} are still there (${noEffect}/2).`);
-      for (const el of picks) { if (document.contains(el)) realClick(el); await sleep(rnd(300, 600)); } // deselect
+      await clickRowsByKey(pickKeys); // deselect
       if (noEffect >= 2) {
         console.warn("Nothing was removed twice in a row - Instagram is silently ignoring the action (usually throttling). Stopped. Wait 30-60+ min.");
         break;
